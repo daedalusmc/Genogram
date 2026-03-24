@@ -386,20 +386,20 @@ export function GenogramEdge({
       {/* Structural decorations (slashes, widowed X) */}
       {renderStructuralDecorations()}
 
-      {/* Waypoint handles — always visible, always draggable */}
+      {/* Waypoint handles — visible only when edge is selected */}
       {waypoints.map((wp, i) => (
         <g key={`wp-${i}`}
           onPointerDown={(e) => onWaypointPointerDown(i, e)}
           onContextMenu={(e) => onWaypointContextMenu(i, e)}
-          style={{ pointerEvents: 'all' }}>
+          style={{ pointerEvents: selected ? 'all' : 'none' }}>
           {/* Large invisible hit area */}
           <circle cx={wp.x} cy={wp.y} r={10}
             fill="rgba(0,0,0,0.001)"
             style={{ cursor: 'grab' }} />
-          {/* Visible dot */}
+          {/* Visible dot — only when selected */}
           <circle cx={wp.x} cy={wp.y} r={4}
             fill="#3b82f6" stroke="white" strokeWidth={1.5}
-            style={{ pointerEvents: 'none' }} />
+            style={{ pointerEvents: 'none', opacity: selected ? 1 : 0, transition: 'opacity 0.15s' }} />
         </g>
       ))}
 

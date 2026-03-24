@@ -82,13 +82,19 @@ html, body, #root {
   cursor: pointer;
 }
 
-.react-flow__handle {
-  opacity: 0;
-  transition: opacity 0.2s;
+/* Snap point handles: hidden by default, visible on node hover */
+.react-flow__handle.snap-handle {
+  opacity: 0 !important;
+  transition: opacity 0.2s, transform 0.15s !important;
 }
 
-.react-flow__node:hover .react-flow__handle {
-  opacity: 1;
+.react-flow__node:hover .react-flow__handle.snap-handle {
+  opacity: 0.4 !important;
+}
+
+.react-flow__handle.snap-handle:hover {
+  opacity: 0.9 !important;
+  transform: translate(-50%, -50%) scale(1.5) !important;
 }
 
 /* ── React Flow Controls ── */

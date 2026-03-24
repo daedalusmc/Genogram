@@ -140,7 +140,7 @@ function PersonNodeComponent({ data, selected }: NodeProps<PersonNodeType>) {
           type="source"
           position={sp.pos}
           id={sp.id}
-          className="!w-2 !h-2 !border-none !rounded-full !opacity-15 hover:!opacity-90 hover:!scale-150 transition-all duration-150"
+          className="!w-2 !h-2 !border-none !rounded-full transition-all duration-150 snap-handle"
           style={{ left: sp.left, top: sp.top, transform: 'translate(-50%, -50%)', backgroundColor: 'var(--accent)' }}
           isConnectable={true}
         />
@@ -152,7 +152,7 @@ function PersonNodeComponent({ data, selected }: NodeProps<PersonNodeType>) {
           type="target"
           position={sp.pos}
           id={`${sp.id}-tgt`}
-          className="!w-2 !h-2 !border-none !rounded-full !opacity-0 hover:!opacity-70 hover:!scale-150 transition-all duration-150"
+          className="!w-2 !h-2 !border-none !rounded-full transition-all duration-150 snap-handle"
           style={{ left: sp.left, top: sp.top, transform: 'translate(-50%, -50%)', backgroundColor: 'var(--accent)' }}
           isConnectable={true}
         />
