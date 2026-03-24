@@ -4,6 +4,7 @@ export interface EdgeRoute {
   sourceHandle: string | null  // snap point ID on source, null = auto
   targetHandle: string | null  // snap point ID on target, null = auto
   waypoints: Array<{ x: number; y: number }>  // intermediate points the line passes through
+  labelOffset?: { x: number; y: number }  // manual label offset from computed midpoint
 }
 
 export interface ChildConnection {

@@ -15,6 +15,31 @@ const GENDER_OPTIONS = [
   { gender: Gender.Pet, label: 'Pet' },
 ]
 
+// Reusable pill button
+function PillBtn({ children, onClick, active, style: extraStyle, ...rest }: {
+  children: React.ReactNode
+  onClick?: () => void
+  active?: boolean
+  style?: React.CSSProperties
+  [k: string]: unknown
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150"
+      style={{
+        backgroundColor: active ? 'var(--accent-soft)' : 'var(--bg-hover)',
+        color: active ? 'var(--accent)' : 'var(--text-secondary)',
+        border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`,
+        ...extraStyle,
+      }}
+      {...rest}
+    >
+      {children}
+    </button>
+  )
+}
+
 function AddPersonDropdown({ onAdd }: { onAdd: (g: Gender, gen: number) => void }) {
   const [open, setOpen] = useState(false)
 
@@ -22,19 +47,24 @@ function AddPersonDropdown({ onAdd }: { onAdd: (g: Gender, gen: number) => void 
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 transition-colors"
+        className="px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-150"
+        style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
       >
         + Add Person
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 min-w-[180px]">
+          <div className="absolute top-full left-0 mt-2 rounded-xl py-1.5 z-50 min-w-[190px] backdrop-blur-xl"
+            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)' }}>
             {GENDER_OPTIONS.map(({ gender, label }) => (
               <button
                 key={gender}
-                onClick={() => { onAdd(gender, 0); setOpen(false); }}
-                className="block w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                onClick={() => { onAdd(gender, 0); setOpen(false) }}
+                className="block w-full text-left px-4 py-2 text-sm font-medium transition-colors"
+                style={{ color: 'var(--text-primary)' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
                 {label}
               </button>
@@ -44,6 +74,37 @@ function AddPersonDropdown({ onAdd }: { onAdd: (g: Gender, gen: number) => void 
       )}
     </div>
   )
+}
+
+function ThemeToggle() {
+  const isDark = useGenogramStore((s) => s.ui.isDarkMode)
+  const toggleTheme = useGenogramStore((s) => s.toggleTheme)
+
+  return (
+    <button
+      onClick={toggleTheme}
+      className="p-2 rounded-full transition-all duration-150"
+      style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-secondary)' }}
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      {isDark ? (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      ) : (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
+// Divider between groups
+function Sep() {
+  return <div className="h-4 w-px mx-0.5" style={{ backgroundColor: 'var(--border)' }} />
 }
 
 export function Toolbar() {
@@ -62,7 +123,6 @@ export function Toolbar() {
 
   const handleAddPerson = useCallback((gender: Gender, generation: number) => {
     addPerson(gender, generation)
-    // Auto fit view after adding so new person is visible
     setTimeout(() => fitView({ padding: 0.3, duration: 300 }), 50)
   }, [addPerson, fitView])
 
@@ -97,77 +157,75 @@ export function Toolbar() {
   if (ui.isPresentationMode) return null
 
   return (
-    <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3 flex-wrap">
+    <div className="px-4 py-2 flex items-center gap-2 flex-wrap backdrop-blur-xl"
+      style={{
+        backgroundColor: ui.isDarkMode ? 'rgba(15,23,42,0.85)' : 'rgba(255,255,255,0.85)',
+        borderBottom: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-sm)',
+      }}>
+
       {/* Title */}
       <input
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="text-lg font-bold text-gray-800 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none px-1 min-w-[200px]"
+        className="text-base font-bold tracking-tight bg-transparent border-b-2 border-transparent focus:outline-none px-1 min-w-[160px] transition-colors"
+        style={{ color: 'var(--text-primary)' }}
+        onFocus={(e) => e.currentTarget.style.borderBottomColor = 'var(--accent)'}
+        onBlur={(e) => e.currentTarget.style.borderBottomColor = 'transparent'}
       />
 
-      <div className="h-6 w-px bg-gray-300" />
+      <Sep />
 
-      {/* Add Person dropdown */}
+      {/* Add Person */}
       <AddPersonDropdown onAdd={handleAddPerson} />
 
-      {/* Auto Layout - recalculates all positions */}
-      <button
-        onClick={() => {
-          setNodePositions({}) // Clear all manual positions
-          triggerAutoLayout()  // Trigger recalculation
+      <Sep />
+
+      {/* Layout group */}
+      <div className="flex items-center gap-1 rounded-full p-0.5"
+        style={{ backgroundColor: 'var(--bg-hover)' }}>
+        <PillBtn onClick={() => {
+          setNodePositions({})
+          triggerAutoLayout()
           setTimeout(() => fitView({ padding: 0.3, duration: 400 }), 100)
-        }}
-        className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200 transition-colors"
-      >
-        Auto Layout
-      </button>
-
-      {/* Fit View */}
-      <button
-        onClick={() => fitView({ padding: 0.2, duration: 400 })}
-        className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200 transition-colors"
-      >
-        Fit View
-      </button>
-
-      {/* Legend */}
-      <button
-        onClick={toggleLegend}
-        className={`px-3 py-1.5 rounded text-sm transition-colors ${
-          ui.showLegend ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-        }`}
-      >
-        Legend
-      </button>
+        }} style={{ backgroundColor: 'transparent' }}>
+          Auto Layout
+        </PillBtn>
+        <PillBtn onClick={() => fitView({ padding: 0.2, duration: 400 })}
+          style={{ backgroundColor: 'transparent' }}>
+          Fit View
+        </PillBtn>
+        <PillBtn onClick={toggleLegend} active={ui.showLegend}
+          style={ui.showLegend ? {} : { backgroundColor: 'transparent' }}>
+          Legend
+        </PillBtn>
+      </div>
 
       <div className="flex-1" />
 
-      {/* Import/Export */}
-      <button
-        onClick={handleImport}
-        className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200 transition-colors"
-      >
-        Import
-      </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-      <button
-        onClick={handleExport}
-        className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200 transition-colors"
-      >
-        Export
-      </button>
+      {/* Right actions */}
+      <ThemeToggle />
 
-      {/* Presentation Mode */}
+      <Sep />
+
+      <div className="flex items-center gap-1">
+        <PillBtn onClick={handleImport}>Import</PillBtn>
+        <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
+        <PillBtn onClick={handleExport}>Export</PillBtn>
+      </div>
+
+      <Sep />
+
+      {/* Present button */}
       <button
         onClick={togglePresentationMode}
-        className="px-3 py-1.5 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700 transition-colors"
+        className="px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-150"
+        style={{
+          background: 'linear-gradient(135deg, var(--accent), #8b5cf6)',
+          color: '#fff',
+          boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+        }}
       >
         Present
       </button>

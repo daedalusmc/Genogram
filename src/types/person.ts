@@ -19,4 +19,6 @@ export interface Person {
   isDeceased: boolean
   pregnancyType: PregnancyType | null
   generation: number
+  parentRelationshipId: string | null  // structural relationship this person is a child of
+  parentIds: string[] | null           // [person1Id, person2Id] from parent relationship
 }

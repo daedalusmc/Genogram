@@ -16,14 +16,21 @@ function AppContent() {
     loadFromLocalStorage()
   }, [loadFromLocalStorage])
 
+  // Apply dark class to document root
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', ui.isDarkMode)
+  }, [ui.isDarkMode])
+
   return (
-    <div className="h-screen w-screen flex flex-col bg-gray-50 overflow-hidden">
+    <div className="h-screen w-screen flex flex-col overflow-hidden"
+      style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       {/* Toolbar */}
       <Toolbar />
 
       {/* Relationship mode banner */}
       {ui.isAddingRelationship && (
-        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800 text-center">
+        <div className="px-4 py-2 text-sm text-center"
+          style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)', borderBottom: '1px solid var(--border)' }}>
           Click on another person to create the relationship. Press Escape or click the background to cancel.
         </div>
       )}

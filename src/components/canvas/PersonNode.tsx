@@ -140,8 +140,8 @@ function PersonNodeComponent({ data, selected }: NodeProps<PersonNodeType>) {
           type="source"
           position={sp.pos}
           id={sp.id}
-          className="!bg-blue-400 !w-2 !h-2 !border !border-white !rounded-full !opacity-20 hover:!opacity-80 transition-opacity"
-          style={{ left: sp.left, top: sp.top, transform: 'translate(-50%, -50%)' }}
+          className="!w-2 !h-2 !border-none !rounded-full !opacity-15 hover:!opacity-90 hover:!scale-150 transition-all duration-150"
+          style={{ left: sp.left, top: sp.top, transform: 'translate(-50%, -50%)', backgroundColor: 'var(--accent)' }}
           isConnectable={true}
         />
       ))}
@@ -152,45 +152,59 @@ function PersonNodeComponent({ data, selected }: NodeProps<PersonNodeType>) {
           type="target"
           position={sp.pos}
           id={`${sp.id}-tgt`}
-          className="!bg-blue-400 !w-2 !h-2 !border !border-white !rounded-full !opacity-0 hover:!opacity-60 transition-opacity"
-          style={{ left: sp.left, top: sp.top, transform: 'translate(-50%, -50%)' }}
+          className="!w-2 !h-2 !border-none !rounded-full !opacity-0 hover:!opacity-70 hover:!scale-150 transition-all duration-150"
+          style={{ left: sp.left, top: sp.top, transform: 'translate(-50%, -50%)', backgroundColor: 'var(--accent)' }}
           isConnectable={true}
         />
       ))}
 
       {/* No alias handles - edges use snap point IDs directly */}
 
-      {/* Symbol */}
-      <PersonSymbol person={person} isSelected={selected} isHighlighted={isHighlighted} />
+      {/* Symbol with subtle drop shadow */}
+      <div style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }}>
+        <PersonSymbol person={person} isSelected={selected} isHighlighted={isHighlighted} />
+      </div>
 
-      {/* Name label */}
-      <div className="text-center mt-1 max-w-[120px]">
-        <div className="text-xs font-semibold text-gray-800 leading-tight truncate">
+      {/* Name label — pill style */}
+      <div className="text-center mt-1.5 max-w-[120px]">
+        <div className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold leading-tight truncate max-w-full"
+          style={{
+            color: 'var(--text-primary)',
+            backgroundColor: 'var(--bg-card)',
+            boxShadow: 'var(--shadow-sm)',
+            border: '1px solid var(--border-subtle)',
+          }}>
           {person.name || 'Unknown'}
         </div>
-        {person.dateOfBirth && (
-          <div className="text-[10px] text-gray-500 leading-tight">
-            b. {formatDate(person.dateOfBirth)}
-          </div>
-        )}
-        {person.dateOfDeath && (
-          <div className="text-[10px] text-gray-500 leading-tight">
-            d. {formatDate(person.dateOfDeath)}
+        {(person.dateOfBirth || person.dateOfDeath) && (
+          <div className="text-[9px] mt-0.5 leading-tight"
+            style={{ color: 'var(--text-muted)' }}>
+            {person.dateOfBirth && `b. ${formatDate(person.dateOfBirth)}`}
+            {person.dateOfBirth && person.dateOfDeath && ' · '}
+            {person.dateOfDeath && `d. ${formatDate(person.dateOfDeath)}`}
           </div>
         )}
       </div>
 
       {/* Presentation info card */}
       {isHighlighted && (
-        <div className="absolute -bottom-28 left-1/2 -translate-x-1/2 bg-white rounded-lg shadow-xl border border-gray-200 p-3 min-w-[200px] z-50">
+        <div className="absolute -bottom-28 left-1/2 -translate-x-1/2 rounded-xl p-3 min-w-[200px] z-50 backdrop-blur-sm"
+          style={{
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            boxShadow: 'var(--shadow-lg)',
+            color: 'var(--text-primary)',
+            animation: 'slideInUp 0.2s ease-out',
+          }}>
           <div className="font-bold text-sm">{person.name || 'Unknown'}</div>
-          {person.dateOfBirth && <div className="text-xs text-gray-600">Born: {formatDate(person.dateOfBirth)}</div>}
-          {person.isDeceased && person.dateOfDeath && <div className="text-xs text-gray-600">Died: {formatDate(person.dateOfDeath)}</div>}
-          {person.notes && <div className="text-xs text-gray-500 mt-1 italic">{person.notes}</div>}
+          {person.dateOfBirth && <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Born: {formatDate(person.dateOfBirth)}</div>}
+          {person.isDeceased && person.dateOfDeath && <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Died: {formatDate(person.dateOfDeath)}</div>}
+          {person.notes && <div className="text-xs mt-1 italic" style={{ color: 'var(--text-muted)' }}>{person.notes}</div>}
           {person.labels.length > 0 && (
             <div className="flex gap-1 mt-1 flex-wrap">
               {person.labels.map((l) => (
-                <span key={l} className="text-[10px] bg-red-100 text-red-700 px-1 rounded">{l}</span>
+                <span key={l} className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+                  style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}>{l}</span>
               ))}
             </div>
           )}

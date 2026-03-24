@@ -20,6 +20,7 @@ import { useGenogramStore } from '../../store/genogramStore'
 import { PersonNodeMemo } from './PersonNode'
 import { GenogramEdge } from './GenogramEdge'
 import { STRUCTURAL_EDGE_STYLES, EMOTIONAL_EDGE_STYLES } from '../../constants/relationshipStyles'
+import { StructuralRelType } from '../../types/enums'
 import { useAutoLayout } from '../../hooks/useAutoLayout'
 
 const nodeTypes: NodeTypes = {
@@ -55,6 +56,8 @@ export function GenogramCanvas() {
   const ui = useGenogramStore((s) => s.ui)
   const openPersonPanel = useGenogramStore((s) => s.openPersonPanel)
   const cancelAddingRelationship = useGenogramStore((s) => s.cancelAddingRelationship)
+  const presentationOrder = useGenogramStore((s) => s.presentationOrder)
+  const setPresentationIndex = useGenogramStore((s) => s.setPresentationIndex)
   const addStructuralRelationship = useGenogramStore((s) => s.addStructuralRelationship)
   const addEmotionalRelationship = useGenogramStore((s) => s.addEmotionalRelationship)
   const addChildToRelationship = useGenogramStore((s) => s.addChildToRelationship)
@@ -150,6 +153,7 @@ export function GenogramCanvas() {
           markerEnd: style.markerEnd,
           label: style.label,
           waypoints: rel.route?.waypoints || [],
+          labelOffset: rel.route?.labelOffset,
         },
       })
     }
@@ -181,6 +185,7 @@ export function GenogramCanvas() {
           strokeDasharray: style.strokeDasharray,
           label: [rel.startDate, rel.endDate].filter(Boolean).join(' - ') || style.label,
           waypoints: rel.route?.waypoints || [],
+          labelOffset: rel.route?.labelOffset,
         },
       })
 
@@ -270,19 +275,25 @@ export function GenogramCanvas() {
           addEmotionalRelationship(sourceId, targetId, 'normal' as never)
         } else if (ui.addRelationshipType === 'child') {
           // Find a structural relationship involving the source person
-          let rel = Object.values(structuralRels).find(
+          const allRels = Object.values(structuralRels).filter(
             (r) => r.person1Id === sourceId || r.person2Id === sourceId
           )
+          let rel = allRels[0] // use first if multiple
           if (!rel) {
-            // No structural relationship — check if there's another person to pair with
-            // Look for any other person on the same generation
+            // No structural relationship exists — create one
+            // Find any other person who could be the other parent
+            // (prefer someone already connected emotionally, or on same generation)
             const sourcePerson = persons[sourceId]
-            const partner = Object.values(persons).find(
-              (p) => p.id !== sourceId && p.id !== targetId && p.generation === sourcePerson?.generation
+            const emoPartner = Object.values(emotionalRels).find(
+              (r) => r.person1Id === sourceId || r.person2Id === sourceId
             )
-            if (partner) {
-              // Create a marriage between source and partner
-              const relId = addStructuralRelationship(sourceId, partner.id, 'marriage' as never)
+            const partnerId = emoPartner
+              ? (emoPartner.person1Id === sourceId ? emoPartner.person2Id : emoPartner.person1Id)
+              : Object.values(persons).find(
+                  (p) => p.id !== sourceId && p.id !== targetId && p.generation === sourcePerson?.generation
+                )?.id
+            if (partnerId) {
+              const relId = addStructuralRelationship(sourceId, partnerId, StructuralRelType.Cohabitation)
               rel = useGenogramStore.getState().structuralRelationships[relId]
             }
           }
@@ -290,10 +301,14 @@ export function GenogramCanvas() {
         }
       }
       cancelAddingRelationship()
+    } else if (ui.isPresentationMode) {
+      // In presentation mode, navigate to the clicked person
+      const idx = (presentationOrder.length > 0 ? presentationOrder : Object.keys(persons)).indexOf(node.id)
+      if (idx >= 0) setPresentationIndex(idx)
     } else {
       openPersonPanel(node.id)
     }
-  }, [ui, openPersonPanel, addStructuralRelationship, addEmotionalRelationship, addChildToRelationship, cancelAddingRelationship, structuralRels])
+  }, [ui, openPersonPanel, addStructuralRelationship, addEmotionalRelationship, addChildToRelationship, cancelAddingRelationship, structuralRels, persons, presentationOrder, setPresentationIndex])
 
   const onPaneClick = useCallback(() => {
     if (ui.isAddingRelationship) cancelAddingRelationship()
@@ -322,8 +337,10 @@ export function GenogramCanvas() {
     })
   }, [addStructuralRelationship, addEmotionalRelationship])
 
+  const isDark = useGenogramStore((s) => s.ui.isDarkMode)
+
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full" style={{ backgroundColor: 'var(--canvas-bg)' }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -340,11 +357,40 @@ export function GenogramCanvas() {
         fitView
         proOptions={{ hideAttribution: true }}
         className={ui.isAddingRelationship ? 'cursor-crosshair' : ''}
+        style={{ backgroundColor: 'var(--canvas-bg)' }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#d1d5db" />
-        {!ui.isPresentationMode && <Controls />}
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={20}
+          size={isDark ? 0.8 : 1}
+          color={isDark ? '#334155' : '#cbd5e1'}
+        />
         {!ui.isPresentationMode && (
-          <MiniMap nodeColor="#94a3b8" maskColor="rgba(0,0,0,0.1)" className="!bg-gray-50" />
+          <Controls
+            showInteractive={false}
+            style={{
+              borderRadius: '12px',
+              overflow: 'hidden',
+            }}
+          />
+        )}
+        {!ui.isPresentationMode && (
+          <MiniMap
+            nodeColor={(node) => {
+              const person = persons[(node as any).id]
+              if (!person) return isDark ? '#475569' : '#94a3b8'
+              if (person.isDeceased) return isDark ? '#6b7280' : '#9ca3af'
+              if (person.gender === 'male') return isDark ? '#60a5fa' : '#3b82f6'
+              if (person.gender === 'female') return isDark ? '#f472b6' : '#ec4899'
+              return isDark ? '#a78bfa' : '#8b5cf6'
+            }}
+            maskColor={isDark ? 'rgba(15,23,42,0.6)' : 'rgba(241,245,249,0.7)'}
+            style={{
+              backgroundColor: isDark ? 'rgba(30,41,59,0.85)' : 'rgba(255,255,255,0.85)',
+            }}
+            pannable
+            zoomable
+          />
         )}
       </ReactFlow>
     </div>

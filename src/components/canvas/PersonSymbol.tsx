@@ -49,7 +49,7 @@ export function PersonSymbol({ person, isSelected, isHighlighted }: Props) {
       )}
 
       {/* 2. Base shape with white fill */}
-      <GenderShape gender={gender} fill={photo ? 'rgba(255,255,255,0.6)' : 'white'} stroke="none" strokeWidth={0} />
+      <GenderShape gender={gender} fill={photo ? 'rgba(255,255,255,0.6)' : 'var(--node-fill, white)'} stroke="none" strokeWidth={0} />
 
       {/* 3. Multiple condition color stripes - each condition gets a horizontal band */}
       {conditions.length > 0 && (
@@ -98,7 +98,7 @@ export function PersonSymbol({ person, isSelected, isHighlighted }: Props) {
       )}
 
       {/* 5. Stroke outline always visible on top */}
-      <GenderShape gender={gender} fill="none" stroke="#374151" strokeWidth={2.5} />
+      <GenderShape gender={gender} fill="none" stroke="var(--node-stroke, #374151)" strokeWidth={2.5} />
 
       {/* 6. Deceased X on top */}
       {isDeceased && <DeceasedX />}
@@ -157,7 +157,7 @@ function GenderShape({ gender, fill, stroke, strokeWidth, opacity }: {
       return (
         <g>
           <rect x={8} y={8} width={SIZE - 16} height={SIZE - 16} transform={`rotate(45 ${HALF} ${HALF})`} {...common} />
-          <text x={HALF} y={HALF + 4} textAnchor="middle" fontSize={14} fill="#374151" fontFamily="sans-serif">?</text>
+          <text x={HALF} y={HALF + 4} textAnchor="middle" fontSize={14} fill="var(--node-stroke, #374151)" fontFamily="sans-serif">?</text>
         </g>
       )
     case Gender.Pet:
@@ -227,7 +227,7 @@ function GenderClipPath({ gender }: { gender: Gender }) {
 
 function DeceasedX() {
   return (
-    <g stroke="#374151" strokeWidth={2.5}>
+    <g stroke="var(--node-stroke, #374151)" strokeWidth={2.5}>
       <line x1={4} y1={4} x2={SIZE - 4} y2={SIZE - 4} />
       <line x1={SIZE - 4} y1={4} x2={4} y2={SIZE - 4} />
     </g>
@@ -240,19 +240,19 @@ function PregnancyShape({ type }: { type: PregnancyType }) {
   const trianglePoints = `${HALF},${8} ${8},${SIZE - 8} ${SIZE - 8},${SIZE - 8}`
   switch (type) {
     case PregnancyType.Pregnancy:
-      return <polygon points={trianglePoints} fill="white" stroke="#374151" strokeWidth={2} />
+      return <polygon points={trianglePoints} fill="var(--node-fill, white)" stroke="var(--node-stroke, #374151)" strokeWidth={2} />
     case PregnancyType.Miscarriage:
       return (
         <g>
-          <polygon points={trianglePoints} fill="white" stroke="#374151" strokeWidth={2} />
-          <line x1={14} y1={14} x2={SIZE - 14} y2={SIZE - 14} stroke="#374151" strokeWidth={2} />
-          <line x1={SIZE - 14} y1={14} x2={14} y2={SIZE - 14} stroke="#374151" strokeWidth={2} />
+          <polygon points={trianglePoints} fill="var(--node-fill, white)" stroke="var(--node-stroke, #374151)" strokeWidth={2} />
+          <line x1={14} y1={14} x2={SIZE - 14} y2={SIZE - 14} stroke="var(--node-stroke, #374151)" strokeWidth={2} />
+          <line x1={SIZE - 14} y1={14} x2={14} y2={SIZE - 14} stroke="var(--node-stroke, #374151)" strokeWidth={2} />
         </g>
       )
     case PregnancyType.Abortion:
       return (
         <g>
-          <polygon points={trianglePoints} fill="#374151" stroke="#374151" strokeWidth={2} />
+          <polygon points={trianglePoints} fill="var(--node-stroke, #374151)" stroke="var(--node-stroke, #374151)" strokeWidth={2} />
           <line x1={14} y1={18} x2={SIZE - 14} y2={SIZE - 14} stroke="white" strokeWidth={2} />
           <line x1={SIZE - 14} y1={18} x2={14} y2={SIZE - 14} stroke="white" strokeWidth={2} />
         </g>
@@ -260,10 +260,10 @@ function PregnancyShape({ type }: { type: PregnancyType }) {
     case PregnancyType.Stillborn:
       return (
         <g>
-          <polygon points={trianglePoints} fill="white" stroke="#374151" strokeWidth={2} />
-          <line x1={HALF} y1={12} x2={14} y2={SIZE - 10} stroke="#374151" strokeWidth={2} />
-          <line x1={HALF} y1={12} x2={SIZE - 14} y2={SIZE - 10} stroke="#374151" strokeWidth={2} />
-          <line x1={14} y1={SIZE - 10} x2={SIZE - 14} y2={SIZE - 10} stroke="#374151" strokeWidth={2} />
+          <polygon points={trianglePoints} fill="var(--node-fill, white)" stroke="var(--node-stroke, #374151)" strokeWidth={2} />
+          <line x1={HALF} y1={12} x2={14} y2={SIZE - 10} stroke="var(--node-stroke, #374151)" strokeWidth={2} />
+          <line x1={HALF} y1={12} x2={SIZE - 14} y2={SIZE - 10} stroke="var(--node-stroke, #374151)" strokeWidth={2} />
+          <line x1={14} y1={SIZE - 10} x2={SIZE - 14} y2={SIZE - 10} stroke="var(--node-stroke, #374151)" strokeWidth={2} />
         </g>
       )
   }

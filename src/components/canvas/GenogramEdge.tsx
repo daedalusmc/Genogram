@@ -36,6 +36,7 @@ export type GenogramEdgeData = {
   attachmentT?: number
   // Route
   waypoints: Array<{ x: number; y: number }>
+  labelOffset?: { x: number; y: number }
 }
 
 type GenogramEdgeType = Edge<GenogramEdgeData, 'genogram'>
@@ -45,9 +46,6 @@ export function GenogramEdge({
   data, selected,
 }: EdgeProps<GenogramEdgeType>) {
   const [showMenu, setShowMenu] = useState(false)
-  const editingEdgeId = useGenogramStore((s) => s.ui.editingEdgeId)
-  const setEditingEdgeId = useGenogramStore((s) => s.setEditingEdgeId)
-  const editMode = editingEdgeId === id
   const { getViewport } = useReactFlow()
   const updateEdgeRoute = useGenogramStore((s) => s.updateEdgeRoute)
   const updateStructuralRelationship = useGenogramStore((s) => s.updateStructuralRelationship)
@@ -59,14 +57,15 @@ export function GenogramEdge({
 
   const kind = data.edgeKind
   const waypoints = data.waypoints || []
-  const strokeColor = selected ? '#3b82f6' : (data.stroke || '#374151')
+  const strokeColor = selected ? 'var(--accent, #3b82f6)' : (data.stroke || 'var(--edge-color, #475569)')
 
   // Build the full point list: source → waypoints → target
-  const allPoints: Array<{ x: number; y: number }> = [
-    { x: sourceX, y: sourceY },
-    ...waypoints,
-    { x: targetX, y: targetY },
-  ]
+  // For child edges, skip the source point (parent shape) — the line should
+  // visually start from the couple line (waypoints[0]), not from a parent's shape
+  const isChildWithWaypoints = kind === 'child' && waypoints.length > 0
+  const allPoints: Array<{ x: number; y: number }> = isChildWithWaypoints
+    ? [...waypoints, { x: targetX, y: targetY }]
+    : [{ x: sourceX, y: sourceY }, ...waypoints, { x: targetX, y: targetY }]
 
   // Build SVG path through all points
   const pathD = allPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
@@ -92,114 +91,226 @@ export function GenogramEdge({
   const lineWidth = data.strokeWidth || 2
   const label = data.label || ''
 
+  // Label offset from store (user-dragged position)
+  const labelOffsetX = data.labelOffset?.x || 0
+  const labelOffsetY = data.labelOffset?.y || 0
+  const finalLabelX = labelX + labelOffsetX
+  const finalLabelY = labelY + labelOffsetY
+
   // Arrow marker for directed emotional edges
   const markerId = data.isDirected && data.markerEnd ? `arrow-${id}` : undefined
 
-  // Click handler opens type menu
-  // Single click: open type menu
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    setShowMenu(!showMenu)
-    setEditingEdgeId(null)
-  }, [showMenu, setEditingEdgeId])
+  // ── Unified line interaction: click = menu, drag = bend ──
+  const DRAG_THRESHOLD = 5
+  const lineDragRef = useRef<{
+    startX: number; startY: number
+    isDragging: boolean
+    wpIndex: number  // index into waypoints array for the new/existing point
+    origX: number; origY: number
+  } | null>(null)
 
-  // Double click: toggle drag handle edit mode (persists in store)
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    setShowMenu(false)
-    setEditingEdgeId(editMode ? null : id)
-  }, [editMode, id, setEditingEdgeId])
+  // Find which segment of allPoints was clicked (closest to click point)
+  const findSegment = useCallback((clientX: number, clientY: number) => {
+    const { x: panX, y: panY, zoom } = getViewport()
+    const flowX = (clientX - panX) / zoom
+    const flowY = (clientY - panY) / zoom
 
-  // Drag a waypoint
-  const dragRef = useRef<{ wpIndex: number; startX: number; startY: number; origX: number; origY: number } | null>(null)
+    let bestDist = Infinity
+    let bestIdx = 0
+    let bestProjX = flowX
+    let bestProjY = flowY
 
-  const onWaypointDrag = useCallback((wpIndex: number, e: React.PointerEvent) => {
-    ;(e.target as Element).setPointerCapture(e.pointerId)
-    e.stopPropagation()
-    e.preventDefault()
-    const wp = waypoints[wpIndex]
-    dragRef.current = { wpIndex, startX: e.clientX, startY: e.clientY, origX: wp.x, origY: wp.y }
-
-    const onMove = (me: PointerEvent) => {
-      if (!dragRef.current) return
-      const zoom = getViewport().zoom
-      const dx = (me.clientX - dragRef.current.startX) / zoom
-      const dy = (me.clientY - dragRef.current.startY) / zoom
-      const newWaypoints = [...waypoints]
-      newWaypoints[dragRef.current.wpIndex] = {
-        x: snap(dragRef.current.origX + dx),
-        y: snap(dragRef.current.origY + dy),
+    for (let i = 0; i < allPoints.length - 1; i++) {
+      const ax = allPoints[i].x, ay = allPoints[i].y
+      const bx = allPoints[i + 1].x, by = allPoints[i + 1].y
+      const dx = bx - ax, dy = by - ay
+      const len2 = dx * dx + dy * dy
+      let t = len2 === 0 ? 0 : ((flowX - ax) * dx + (flowY - ay) * dy) / len2
+      t = Math.max(0, Math.min(1, t))
+      const px = ax + t * dx, py = ay + t * dy
+      const dist = Math.hypot(flowX - px, flowY - py)
+      if (dist < bestDist) {
+        bestDist = dist
+        bestIdx = i  // segment index in allPoints (0 = before first waypoint)
+        bestProjX = px
+        bestProjY = py
       }
-      updateEdgeRoute(kind === 'child' ? 'structural' : kind, data.relId, { waypoints: newWaypoints })
     }
+    // Convert allPoints segment index to waypoints insertion index
+    // Normal edges: allPoints[0]=source, so segment i → insert at waypoints[i]
+    // Child edges: allPoints[0]=waypoints[0] (source skipped), so segment i → insert at waypoints[i+1]
+    const wpInsertIdx = isChildWithWaypoints ? bestIdx + 1 : bestIdx
+    return { segIdx: wpInsertIdx, projX: bestProjX, projY: bestProjY }
+  }, [allPoints, getViewport, isChildWithWaypoints])
 
-    const onUp = (me: PointerEvent) => {
-      ;(me.target as Element).releasePointerCapture?.(me.pointerId)
-      dragRef.current = null
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }, [waypoints, data.relId, kind, getViewport, updateEdgeRoute])
-
-  // Drag a segment midpoint to insert a new waypoint
-  const onMidpointDrag = useCallback((afterIndex: number, e: React.PointerEvent) => {
-    ;(e.target as Element).setPointerCapture(e.pointerId)
+  // Pointer down on the line hit area — could be click or drag
+  const onLinePointerDown = useCallback((e: React.PointerEvent) => {
     e.stopPropagation()
-    e.preventDefault()
-
-    const mid = segmentMids.find((s) => s.afterIndex === afterIndex)
-    if (!mid) return
-
-    // Insert a new waypoint at the midpoint
-    const newWaypoints = [...waypoints]
-    const insertAt = afterIndex // waypoint index (0-based, relative to waypoints array not allPoints)
-    newWaypoints.splice(insertAt, 0, { x: snap(mid.x), y: snap(mid.y) })
-    updateEdgeRoute(kind === 'child' ? 'structural' : kind, data.relId, { waypoints: newWaypoints })
-
-    // Now track this newly inserted waypoint
-    const newIdx = insertAt
     const startX = e.clientX
     const startY = e.clientY
-    const origX = snap(mid.x)
-    const origY = snap(mid.y)
+    const { segIdx, projX, projY } = findSegment(startX, startY)
+
+    lineDragRef.current = {
+      startX, startY,
+      isDragging: false,
+      wpIndex: segIdx,  // will insert at this index in waypoints
+      origX: snap(projX),
+      origY: snap(projY),
+    }
+
+    const relId = data.relId
+    const edgeKind = kind
+
+    const onMove = (me: PointerEvent) => {
+      if (!lineDragRef.current) return
+      const dist = Math.hypot(me.clientX - lineDragRef.current.startX, me.clientY - lineDragRef.current.startY)
+
+      if (!lineDragRef.current.isDragging && dist > DRAG_THRESHOLD) {
+        // Crossed threshold — insert waypoint and start dragging
+        lineDragRef.current.isDragging = true
+        const insertIdx = lineDragRef.current.wpIndex
+        const state = useGenogramStore.getState()
+        const rel = (edgeKind === 'structural' || edgeKind === 'child')
+          ? state.structuralRelationships[relId]
+          : state.emotionalRelationships[relId]
+        if (!rel) return
+        const newWp = [...rel.route.waypoints]
+        newWp.splice(insertIdx, 0, { x: lineDragRef.current.origX, y: lineDragRef.current.origY })
+        updateEdgeRoute(edgeKind === 'child' ? 'structural' : edgeKind, relId, { waypoints: newWp })
+      }
+
+      if (lineDragRef.current.isDragging) {
+        const zoom = getViewport().zoom
+        const dx = (me.clientX - lineDragRef.current.startX) / zoom
+        const dy = (me.clientY - lineDragRef.current.startY) / zoom
+        const state = useGenogramStore.getState()
+        const rel = (edgeKind === 'structural' || edgeKind === 'child')
+          ? state.structuralRelationships[relId]
+          : state.emotionalRelationships[relId]
+        if (!rel) return
+        const currentWp = [...rel.route.waypoints]
+        const idx = lineDragRef.current.wpIndex
+        if (currentWp[idx]) {
+          currentWp[idx] = {
+            x: snap(lineDragRef.current.origX + dx),
+            y: snap(lineDragRef.current.origY + dy),
+          }
+          updateEdgeRoute(edgeKind === 'child' ? 'structural' : edgeKind, relId, { waypoints: currentWp })
+        }
+      }
+    }
+
+    const onUp = () => {
+      const wasDragging = lineDragRef.current?.isDragging || false
+      lineDragRef.current = null
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      // If it wasn't a drag, treat as click → open menu
+      if (!wasDragging) {
+        setShowMenu((prev) => !prev)
+      }
+    }
+
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+  }, [data.relId, kind, findSegment, getViewport, updateEdgeRoute, setShowMenu])
+
+  // Drag an existing waypoint
+  const onWaypointPointerDown = useCallback((wpIndex: number, e: React.PointerEvent) => {
+    e.stopPropagation()
+    const startX = e.clientX
+    const startY = e.clientY
+    const wp = waypoints[wpIndex]
+    const origX = wp.x
+    const origY = wp.y
+    const relId = data.relId
+    const edgeKind = kind
 
     const onMove = (me: PointerEvent) => {
       const zoom = getViewport().zoom
       const dx = (me.clientX - startX) / zoom
       const dy = (me.clientY - startY) / zoom
-      // Re-read current waypoints from store
       const state = useGenogramStore.getState()
-      let rel
-      if (kind === 'structural' || kind === 'child') {
-        rel = state.structuralRelationships[data.relId]
-      } else {
-        rel = state.emotionalRelationships[data.relId]
-      }
+      const rel = (edgeKind === 'structural' || edgeKind === 'child')
+        ? state.structuralRelationships[relId]
+        : state.emotionalRelationships[relId]
       if (!rel) return
-      const currentWaypoints = [...rel.route.waypoints]
-      if (currentWaypoints[newIdx]) {
-        currentWaypoints[newIdx] = { x: snap(origX + dx), y: snap(origY + dy) }
-        updateEdgeRoute(kind === 'child' ? 'structural' : kind, data.relId, { waypoints: currentWaypoints })
+      const currentWp = [...rel.route.waypoints]
+      if (currentWp[wpIndex]) {
+        currentWp[wpIndex] = { x: snap(origX + dx), y: snap(origY + dy) }
+        updateEdgeRoute(edgeKind === 'child' ? 'structural' : edgeKind, relId, { waypoints: currentWp })
       }
     }
 
-    const onUp = (me: PointerEvent) => {
-      ;(me.target as Element).releasePointerCapture?.(me.pointerId)
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
     }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }, [waypoints, segmentMids, data.relId, kind, getViewport, updateEdgeRoute])
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+  }, [waypoints, data.relId, kind, getViewport, updateEdgeRoute])
+
+  // Right-click a waypoint to delete it
+  const onWaypointContextMenu = useCallback((wpIndex: number, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const state = useGenogramStore.getState()
+    const edgeKind = kind
+    const relId = data.relId
+    const rel = (edgeKind === 'structural' || edgeKind === 'child')
+      ? state.structuralRelationships[relId]
+      : state.emotionalRelationships[relId]
+    if (!rel) return
+    const newWp = [...rel.route.waypoints]
+    newWp.splice(wpIndex, 1)
+    updateEdgeRoute(edgeKind === 'child' ? 'structural' : edgeKind, relId, { waypoints: newWp })
+  }, [data.relId, kind, updateEdgeRoute])
+
+  // Drag the label to reposition it
+  const labelDragRef = useRef<{ startX: number; startY: number; origOffX: number; origOffY: number } | null>(null)
+
+  const onLabelPointerDown = useCallback((e: React.PointerEvent) => {
+    // Stop React Flow from panning
+    e.stopPropagation()
+
+    const startX = e.clientX
+    const startY = e.clientY
+    const origOffX = labelOffsetX
+    const origOffY = labelOffsetY
+    const relId = data.relId
+    const edgeKind = kind
+
+    labelDragRef.current = { startX, startY, origOffX, origOffY }
+
+    const onMove = (me: PointerEvent) => {
+      me.preventDefault()
+      const zoom = getViewport().zoom
+      const dx = (me.clientX - startX) / zoom
+      const dy = (me.clientY - startY) / zoom
+      updateEdgeRoute(edgeKind === 'child' ? 'structural' : edgeKind, relId, {
+        labelOffset: {
+          x: snap(origOffX + dx),
+          y: snap(origOffY + dy),
+        },
+      })
+    }
+
+    const onUp = () => {
+      labelDragRef.current = null
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+    }
+
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+  }, [labelOffsetX, labelOffsetY, data.relId, kind, getViewport, updateEdgeRoute])
 
   // Render structural-specific decorations
   const renderStructuralDecorations = () => {
     if (kind !== 'structural') return null
     const slashes = data.slashes || 0
-    const midX = labelX
-    const midY = labelY
+    const midX = finalLabelX
+    const midY = finalLabelY
 
     return (
       <>
@@ -258,11 +369,10 @@ export function GenogramEdge({
         </defs>
       )}
 
-      {/* Invisible click/double-click area */}
-      <path d={pathD} fill="none" stroke="transparent" strokeWidth={16}
-        style={{ cursor: editMode ? 'move' : 'pointer' }}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick} />
+      {/* Invisible drag/click hit area — pointerEvents: all to override React Flow's visiblestroke */}
+      <path d={pathD} fill="none" stroke="rgba(0,0,0,0.001)" strokeWidth={18}
+        style={{ cursor: 'pointer', pointerEvents: 'all' }}
+        onPointerDown={onLinePointerDown} />
 
       {/* Main visible path */}
       <path d={pathD} fill="none" stroke={strokeColor} strokeWidth={lineWidth}
@@ -276,51 +386,56 @@ export function GenogramEdge({
       {/* Structural decorations (slashes, widowed X) */}
       {renderStructuralDecorations()}
 
-      {/* Label */}
+      {/* Waypoint handles — always visible, always draggable */}
+      {waypoints.map((wp, i) => (
+        <g key={`wp-${i}`}
+          onPointerDown={(e) => onWaypointPointerDown(i, e)}
+          onContextMenu={(e) => onWaypointContextMenu(i, e)}
+          style={{ pointerEvents: 'all' }}>
+          {/* Large invisible hit area */}
+          <circle cx={wp.x} cy={wp.y} r={10}
+            fill="rgba(0,0,0,0.001)"
+            style={{ cursor: 'grab' }} />
+          {/* Visible dot */}
+          <circle cx={wp.x} cy={wp.y} r={4}
+            fill="#3b82f6" stroke="white" strokeWidth={1.5}
+            style={{ pointerEvents: 'none' }} />
+        </g>
+      ))}
+
+      {/* Label — draggable to reposition */}
       {label && (
-        <text x={labelX} y={labelY - 10} textAnchor="middle" fontSize={9}
-          fill={data.stroke || '#6b7280'} fontFamily="sans-serif"
-          style={{ pointerEvents: 'none' }}>
-          {label}
-        </text>
-      )}
-
-      {/* Highlight the line when in edit mode */}
-      {editMode && (
-        <path d={pathD} fill="none" stroke="#3b82f6" strokeWidth={3}
-          strokeDasharray="6 3" style={{ pointerEvents: 'none', opacity: 0.5 }} />
-      )}
-
-      {/* Draggable handles only shown when in edit mode (double-click to toggle) */}
-      {editMode && (
-        <>
-          {/* Waypoint handles */}
-          {waypoints.map((wp, i) => (
-            <g key={`wp-${i}`}>
-              <circle cx={wp.x} cy={wp.y} r={12} fill="transparent"
-                style={{ cursor: 'grab' }} onPointerDown={(e) => onWaypointDrag(i, e)} />
-              <circle cx={wp.x} cy={wp.y} r={4}
-                fill="#3b82f6" stroke="white" strokeWidth={1.5}
-                style={{ pointerEvents: 'none' }} />
-            </g>
-          ))}
-
-          {/* Segment midpoint handles */}
-          {segmentMids.map((mid, i) => (
-            <g key={`mid-${i}`}>
-              <circle cx={mid.x} cy={mid.y} r={10} fill="transparent"
-                style={{ cursor: 'crosshair' }}
-                onPointerDown={(e) => onMidpointDrag(mid.afterIndex, e)} />
-              <circle cx={mid.x} cy={mid.y} r={3}
-                fill="#60a5fa" stroke="white" strokeWidth={1}
-                style={{ pointerEvents: 'none' }} />
-            </g>
-          ))}
-        </>
+        <g
+          onPointerDown={onLabelPointerDown}
+          style={{ cursor: 'grab', pointerEvents: 'all' }}
+        >
+          {/* Invisible wider hit area for easier grabbing */}
+          <rect
+            x={finalLabelX - 40} y={finalLabelY - 22}
+            width={80} height={20}
+            fill="rgba(255,255,255,0.01)"
+            style={{ pointerEvents: 'all' }}
+          />
+          {/* Background pill for readability */}
+          <rect
+            x={finalLabelX - 36} y={finalLabelY - 21}
+            width={72} height={16} rx={8}
+            fill="var(--bg-card, white)" fillOpacity={0.95}
+            stroke="var(--border-subtle, #e2e8f0)" strokeWidth={0.5}
+            style={{ pointerEvents: 'none' }}
+          />
+          {/* Label text */}
+          <text x={finalLabelX} y={finalLabelY - 10} textAnchor="middle" fontSize={9}
+            fill={data.stroke || 'var(--text-secondary, #6b7280)'} fontFamily="Inter, sans-serif"
+            fontWeight="500" letterSpacing="0.01em"
+            style={{ pointerEvents: 'none', userSelect: 'none' }}>
+            {label}
+          </text>
+        </g>
       )}
 
       {/* Unified type selector menu */}
-      <EdgeMenu flowX={labelX} flowY={labelY} open={showMenu} onClose={() => setShowMenu(false)}>
+      <EdgeMenu flowX={finalLabelX} flowY={finalLabelY} open={showMenu} onClose={() => setShowMenu(false)}>
         {kind !== 'child' ? (
           <UnifiedRelMenu
             edgeKind={kind}
@@ -329,7 +444,7 @@ export function GenogramEdge({
             onClose={() => setShowMenu(false)}
           />
         ) : (
-          <div className="px-3 py-2 text-sm text-gray-500">
+          <div className="px-3 py-2 text-sm" style={{ color: 'var(--text-muted)' }}>
             Child connection (managed from parent's edit panel)
           </div>
         )}
@@ -374,15 +489,17 @@ function UnifiedRelMenu({ edgeKind, relId, relType, onClose }: {
   return (
     <>
       {/* Category toggle */}
-      <div className="flex border-b border-gray-200 mb-1">
+      <div className="flex mb-1" style={{ borderBottom: '1px solid var(--border)' }}>
         <button
           onClick={() => setCategory('familial')}
-          className={`flex-1 px-3 py-1.5 text-xs font-semibold ${category === 'familial' ? 'text-blue-700 border-b-2 border-blue-700' : 'text-gray-400'}`}>
+          className="flex-1 px-3 py-1.5 text-xs font-semibold transition-colors"
+          style={{ color: category === 'familial' ? 'var(--accent)' : 'var(--text-muted)', borderBottom: category === 'familial' ? '2px solid var(--accent)' : '2px solid transparent' }}>
           Familial
         </button>
         <button
           onClick={() => setCategory('emotional')}
-          className={`flex-1 px-3 py-1.5 text-xs font-semibold ${category === 'emotional' ? 'text-blue-700 border-b-2 border-blue-700' : 'text-gray-400'}`}>
+          className="flex-1 px-3 py-1.5 text-xs font-semibold transition-colors"
+          style={{ color: category === 'emotional' ? 'var(--accent)' : 'var(--text-muted)', borderBottom: category === 'emotional' ? '2px solid var(--accent)' : '2px solid transparent' }}>
           Emotional
         </button>
       </div>
@@ -395,12 +512,18 @@ function UnifiedRelMenu({ edgeKind, relId, relType, onClose }: {
               if (edgeKind === 'structural') {
                 updateStructuralRelationship(relId, { type })
               } else {
-                // Convert from emotional to structural
                 convertToStructural(relId, type)
               }
               onClose()
             }}
-            className={`block w-full text-left px-3 py-1 hover:bg-gray-100 text-sm ${edgeKind === 'structural' && relType === type ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}`}>
+            className="block w-full text-left px-3 py-1 text-sm transition-colors"
+            style={{
+              color: edgeKind === 'structural' && relType === type ? 'var(--accent)' : 'var(--text-primary)',
+              backgroundColor: edgeKind === 'structural' && relType === type ? 'var(--accent-soft)' : 'transparent',
+              fontWeight: edgeKind === 'structural' && relType === type ? 500 : 400,
+            }}
+            onMouseEnter={(e) => { if (!(edgeKind === 'structural' && relType === type)) e.currentTarget.style.backgroundColor = 'var(--bg-hover)' }}
+            onMouseLeave={(e) => { if (!(edgeKind === 'structural' && relType === type)) e.currentTarget.style.backgroundColor = 'transparent' }}>
             {STRUCTURAL_REL_LABELS[type]}
           </button>
         ))}
@@ -410,30 +533,39 @@ function UnifiedRelMenu({ edgeKind, relId, relType, onClose }: {
               if (edgeKind === 'emotional') {
                 updateEmotionalRelationship(relId, { type })
               } else {
-                // Convert from structural to emotional
                 convertToEmotional(relId, type)
               }
               onClose()
             }}
-            className={`block w-full text-left px-3 py-1 hover:bg-gray-100 text-sm ${edgeKind === 'emotional' && relType === type ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}`}>
+            className="block w-full text-left px-3 py-1 text-sm transition-colors"
+            style={{
+              color: edgeKind === 'emotional' && relType === type ? 'var(--accent)' : 'var(--text-primary)',
+              backgroundColor: edgeKind === 'emotional' && relType === type ? 'var(--accent-soft)' : 'transparent',
+              fontWeight: edgeKind === 'emotional' && relType === type ? 500 : 400,
+            }}
+            onMouseEnter={(e) => { if (!(edgeKind === 'emotional' && relType === type)) e.currentTarget.style.backgroundColor = 'var(--bg-hover)' }}
+            onMouseLeave={(e) => { if (!(edgeKind === 'emotional' && relType === type)) e.currentTarget.style.backgroundColor = 'transparent' }}>
             <span className="inline-block w-3 h-0.5 mr-2 align-middle"
-              style={{ backgroundColor: EMOTIONAL_EDGE_STYLES[type]?.stroke || '#374151' }} />
+              style={{ backgroundColor: EMOTIONAL_EDGE_STYLES[type]?.stroke || 'var(--edge-color)' }} />
             {EMOTIONAL_REL_LABELS[type]}
           </button>
         ))}
       </div>
 
       {/* Connection points */}
-      <div className="border-t border-gray-200 mt-1 pt-1">
-        <div className="px-3 py-1 text-xs text-gray-400 uppercase font-semibold">Connection Points</div>
+      <div className="mt-1 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
+        <div className="px-3 py-1 text-xs uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>Connection Points</div>
         <SnapPointPicker label="Source" relId={relId} relType={edgeKind} endpoint="source" onClose={onClose} />
         <SnapPointPicker label="Target" relId={relId} relType={edgeKind} endpoint="target" onClose={onClose} />
       </div>
 
       {/* Delete */}
-      <div className="border-t border-gray-200 mt-1 pt-1">
+      <div className="mt-1 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
         <button onClick={handleDelete}
-          className="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 text-sm">
+          className="block w-full text-left px-3 py-1.5 text-sm transition-colors"
+          style={{ color: 'var(--danger)' }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--danger-soft)'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
           Delete Relationship
         </button>
       </div>
@@ -476,7 +608,7 @@ function SnapPointPicker({ label, relId, relType, endpoint, onClose }: {
 
   return (
     <div className="px-3 py-1">
-      <div className="text-xs text-gray-500 mb-1">{label} point:</div>
+      <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label} point:</div>
       <div className="flex flex-wrap gap-1">
         {handles.map((h) => (
           <button
@@ -488,7 +620,10 @@ function SnapPointPicker({ label, relId, relType, endpoint, onClose }: {
               updateEdgeRoute(relType, relId, update)
               onClose()
             }}
-            className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded hover:bg-blue-100 hover:text-blue-700"
+            className="text-[10px] px-1.5 py-0.5 rounded-md transition-colors"
+            style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--accent-soft)'; e.currentTarget.style.color = 'var(--accent)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-secondary)' }}
           >
             {h.label}
           </button>

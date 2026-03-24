@@ -17,6 +17,7 @@ interface UIState {
   showLegend: boolean
   toolMode: 'hand' | 'pointer' | 'move'
   editingEdgeId: string | null
+  isDarkMode: boolean
 }
 
 interface GenogramStore {
@@ -68,6 +69,7 @@ interface GenogramStore {
   toggleLegend: () => void
   setToolMode: (mode: 'hand' | 'pointer' | 'move') => void
   setEditingEdgeId: (id: string | null) => void
+  toggleTheme: () => void
   setTitle: (title: string) => void
 
   // Actions - Positions
@@ -105,6 +107,7 @@ const DEFAULT_UI: UIState = {
   showLegend: false,
   toolMode: 'pointer' as const,
   editingEdgeId: null,
+  isDarkMode: localStorage.getItem('genogram-theme') === 'dark',
 }
 
 function createDefaultPerson(gender: Gender, generation: number): Person {
@@ -121,7 +124,102 @@ function createDefaultPerson(gender: Gender, generation: number): Person {
     isDeceased: false,
     pregnancyType: null,
     generation,
+    parentRelationshipId: null,
+    parentIds: null,
   }
+}
+
+// Compute generation levels from the parent-child tree via BFS
+function computeGenerations(
+  persons: Record<string, Person>,
+  structuralRels: Record<string, StructuralRelationship>,
+): Record<string, number> {
+  // Build child→parentRelId map
+  const childToRel: Record<string, string> = {}
+  for (const rel of Object.values(structuralRels)) {
+    for (const child of rel.children) {
+      childToRel[child.childId] = rel.id
+    }
+  }
+
+  // Find roots: persons who are not children of any relationship
+  const allIds = Object.keys(persons)
+  const childIds = new Set(Object.keys(childToRel))
+  const roots = allIds.filter((id) => !childIds.has(id))
+
+  const generations: Record<string, number> = {}
+
+  // BFS from roots
+  const queue: Array<{ id: string; gen: number }> = roots.map((id) => ({ id, gen: 0 }))
+  const visited = new Set<string>()
+
+  while (queue.length > 0) {
+    const { id, gen } = queue.shift()!
+    if (visited.has(id)) continue
+    visited.add(id)
+    generations[id] = gen
+
+    // If this person is a partner in any structural relationship, ensure partner has same generation
+    for (const rel of Object.values(structuralRels)) {
+      if (rel.person1Id === id && !visited.has(rel.person2Id)) {
+        queue.push({ id: rel.person2Id, gen })
+      } else if (rel.person2Id === id && !visited.has(rel.person1Id)) {
+        queue.push({ id: rel.person1Id, gen })
+      }
+
+      // Process children of relationships this person is part of
+      if (rel.person1Id === id || rel.person2Id === id) {
+        for (const child of rel.children) {
+          if (!visited.has(child.childId)) {
+            queue.push({ id: child.childId, gen: gen + 1 })
+          }
+        }
+      }
+    }
+  }
+
+  // Any unvisited persons default to generation 0
+  for (const id of allIds) {
+    if (!(id in generations)) generations[id] = 0
+  }
+
+  return generations
+}
+
+// Sync parentRelationshipId, parentIds, and generation on all persons
+function syncPersonParentRefs(
+  persons: Record<string, Person>,
+  structuralRels: Record<string, StructuralRelationship>,
+): Record<string, Person> {
+  const updated = { ...persons }
+
+  // Clear all parent refs
+  for (const id of Object.keys(updated)) {
+    updated[id] = { ...updated[id], parentRelationshipId: null, parentIds: null }
+  }
+
+  // Set parent refs from structural relationship children
+  for (const rel of Object.values(structuralRels)) {
+    for (const child of rel.children) {
+      if (updated[child.childId]) {
+        updated[child.childId] = {
+          ...updated[child.childId],
+          parentRelationshipId: rel.id,
+          parentIds: [rel.person1Id, rel.person2Id],
+        }
+      }
+    }
+  }
+
+  // Compute generations and apply
+  const generations = computeGenerations(updated, structuralRels)
+  for (const [id, gen] of Object.entries(generations)) {
+    if (updated[id]) {
+      updated[id] = { ...updated[id], generation: gen }
+    }
+  }
+
+  return updated
 }
 
 export const useGenogramStore = create<GenogramStore>((set, get) => ({
@@ -184,7 +282,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
       }
 
       return {
-        persons: newPersons,
+        persons: syncPersonParentRefs(newPersons, newStructural),
         structuralRelationships: newStructural,
         emotionalRelationships: newEmotional,
         presentationOrder: state.presentationOrder.filter((pid) => pid !== id),
@@ -227,7 +325,10 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
     set((state) => {
       const newRels = { ...state.structuralRelationships }
       delete newRels[id]
-      return { structuralRelationships: newRels }
+      return {
+        structuralRelationships: newRels,
+        persons: syncPersonParentRefs(state.persons, newRels),
+      }
     })
     get().saveSnapshot()
   },
@@ -237,11 +338,13 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
       const rel = state.structuralRelationships[relId]
       if (!rel) return state
       const child: ChildConnection = { childId, type: connectionType, attachmentT: 0.5 }
+      const newStructural = {
+        ...state.structuralRelationships,
+        [relId]: { ...rel, children: [...rel.children, child] },
+      }
       return {
-        structuralRelationships: {
-          ...state.structuralRelationships,
-          [relId]: { ...rel, children: [...rel.children, child] },
-        },
+        structuralRelationships: newStructural,
+        persons: syncPersonParentRefs(state.persons, newStructural),
       }
     })
     get().saveSnapshot()
@@ -251,11 +354,13 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
     set((state) => {
       const rel = state.structuralRelationships[relId]
       if (!rel) return state
+      const newStructural = {
+        ...state.structuralRelationships,
+        [relId]: { ...rel, children: rel.children.filter((c) => c.childId !== childId) },
+      }
       return {
-        structuralRelationships: {
-          ...state.structuralRelationships,
-          [relId]: { ...rel, children: rel.children.filter((c) => c.childId !== childId) },
-        },
+        structuralRelationships: newStructural,
+        persons: syncPersonParentRefs(state.persons, newStructural),
       }
     })
     get().saveSnapshot()
@@ -363,6 +468,14 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
     set((state) => ({ ui: { ...state.ui, editingEdgeId: id } }))
   },
 
+  toggleTheme: () => {
+    set((state) => {
+      const newDark = !state.ui.isDarkMode
+      localStorage.setItem('genogram-theme', newDark ? 'dark' : 'light')
+      return { ui: { ...state.ui, isDarkMode: newDark } }
+    })
+  },
+
   setTitle: (title) => set({ title }),
 
   setPresentationOrder: (order) => set({ presentationOrder: order }),
@@ -440,6 +553,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
     set({
       structuralRelationships: newStruct,
       emotionalRelationships: { ...state.emotionalRelationships, [id]: emoRel },
+      persons: syncPersonParentRefs(state.persons, newStruct),
     })
     get().saveToLocalStorage()
     return id
@@ -458,9 +572,11 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
     }
     const newEmo = { ...state.emotionalRelationships }
     delete newEmo[emoRelId]
+    const newStruct = { ...state.structuralRelationships, [id]: structRel }
     set({
       emotionalRelationships: newEmo,
-      structuralRelationships: { ...state.structuralRelationships, [id]: structRel },
+      structuralRelationships: newStruct,
+      persons: syncPersonParentRefs(state.persons, newStruct),
     })
     get().saveToLocalStorage()
     return id
@@ -511,10 +627,12 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
   importJSON: (json) => {
     try {
       const data = JSON.parse(json)
+      const persons = data.persons || {}
+      const structuralRels = data.structuralRelationships || {}
       set({
         title: data.title || 'Imported Genogram',
-        persons: data.persons || {},
-        structuralRelationships: data.structuralRelationships || {},
+        persons: syncPersonParentRefs(persons, structuralRels),
+        structuralRelationships: structuralRels,
         emotionalRelationships: data.emotionalRelationships || {},
         presentationOrder: data.presentationOrder || [],
         nodePositions: data.nodePositions || {},
@@ -547,15 +665,19 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
       const raw = localStorage.getItem('genogram-data')
       if (!raw) return false
       const data = JSON.parse(raw)
+      const persons = data.persons || {}
+      const structuralRels = data.structuralRelationships || {}
       set({
         title: data.title || 'My Family Genogram',
-        persons: data.persons || {},
-        structuralRelationships: data.structuralRelationships || {},
+        persons: syncPersonParentRefs(persons, structuralRels),
+        structuralRelationships: structuralRels,
         emotionalRelationships: data.emotionalRelationships || {},
         presentationOrder: data.presentationOrder || [],
         nodePositions: data.nodePositions || {},
         edgeWaypoints: data.edgeWaypoints || {},
       })
+      // Re-save immediately so migrated parent refs persist
+      get().saveToLocalStorage()
       return true
     } catch {
       return false

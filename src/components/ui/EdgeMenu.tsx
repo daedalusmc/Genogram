@@ -60,13 +60,18 @@ export function EdgeMenu({ flowX, flowY, open, onClose, children }: EdgeMenuProp
   return createPortal(
     <div
       ref={menuRef}
-      className="fixed bg-white rounded-lg shadow-xl border border-gray-200 py-1 text-sm z-[9999]"
+      className="fixed rounded-lg py-1 text-sm z-[9999]"
+      data-theme-menu
       style={{
         left: pos.x,
         top: pos.y + 8,
         maxHeight: 320,
         overflowY: 'auto',
         minWidth: 180,
+        backgroundColor: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-lg)',
+        color: 'var(--text-primary)',
       }}
     >
       {children}
