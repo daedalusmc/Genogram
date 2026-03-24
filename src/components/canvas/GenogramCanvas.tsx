@@ -14,6 +14,7 @@ import {
   type EdgeTypes,
   type OnNodeDrag,
   BackgroundVariant,
+  ConnectionMode,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useGenogramStore } from '../../store/genogramStore'
@@ -94,6 +95,7 @@ export function GenogramCanvas() {
         position: pos,
         data: { person },
         selected: ui.selectedPersonId === person.id,
+        dragHandle: '.drag-handle',
       }
     })
   }, [persons, nodePositions, ui.selectedPersonId])
@@ -354,6 +356,7 @@ export function GenogramCanvas() {
         edgeTypes={edgeTypes}
         snapToGrid={true}
         snapGrid={SNAP_GRID}
+        connectionMode={ConnectionMode.Loose}
         fitView
         proOptions={{ hideAttribution: true }}
         className={ui.isAddingRelationship ? 'cursor-crosshair' : ''}

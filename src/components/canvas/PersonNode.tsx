@@ -133,15 +133,15 @@ function PersonNodeComponent({ data, selected }: NodeProps<PersonNodeType>) {
   return (
     <div className="flex flex-col items-center cursor-pointer group/node" style={{ width: 120, position: 'relative' }}>
 
-      {/* Snap point handles - source type (drag FROM these) */}
+      {/* Snap point handles - source type (drag FROM these to create connections) */}
       {snapPoints.map((sp) => (
         <Handle
           key={`src-${sp.id}`}
           type="source"
           position={sp.pos}
           id={sp.id}
-          className="!w-2 !h-2 !border-none !rounded-full transition-all duration-150 snap-handle"
-          style={{ left: sp.left, top: sp.top, transform: 'translate(-50%, -50%)', backgroundColor: 'var(--accent)' }}
+          className="nodrag nopan !w-3 !h-3 !border-none !rounded-full transition-all duration-150 snap-handle"
+          style={{ left: sp.left, top: sp.top, transform: 'translate(-50%, -50%)', backgroundColor: 'var(--accent)', zIndex: 10 }}
           isConnectable={true}
         />
       ))}
@@ -152,21 +152,21 @@ function PersonNodeComponent({ data, selected }: NodeProps<PersonNodeType>) {
           type="target"
           position={sp.pos}
           id={`${sp.id}-tgt`}
-          className="!w-2 !h-2 !border-none !rounded-full transition-all duration-150 snap-handle"
-          style={{ left: sp.left, top: sp.top, transform: 'translate(-50%, -50%)', backgroundColor: 'var(--accent)' }}
+          className="nodrag nopan !w-3 !h-3 !border-none !rounded-full transition-all duration-150 snap-handle"
+          style={{ left: sp.left, top: sp.top, transform: 'translate(-50%, -50%)', backgroundColor: 'var(--accent)', zIndex: 10 }}
           isConnectable={true}
         />
       ))}
 
       {/* No alias handles - edges use snap point IDs directly */}
 
-      {/* Symbol with subtle drop shadow */}
-      <div style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }}>
+      {/* Symbol + name: this is the drag handle area */}
+      <div className="drag-handle" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))', cursor: 'grab' }}>
         <PersonSymbol person={person} isSelected={selected} isHighlighted={isHighlighted} />
       </div>
 
-      {/* Name label — pill style */}
-      <div className="text-center mt-1.5 max-w-[120px]">
+      {/* Name label — pill style, also draggable */}
+      <div className="drag-handle text-center mt-1.5 max-w-[120px]" style={{ cursor: 'grab' }}>
         <div className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold leading-tight truncate max-w-full"
           style={{
             color: 'var(--text-primary)',
