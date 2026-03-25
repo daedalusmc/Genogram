@@ -13,14 +13,15 @@ interface Props {
 export function PersonSymbol({ person, isSelected, isHighlighted }: Props) {
   const { gender, isDeceased, pregnancyType, photo, conditions } = person
 
-  if (pregnancyType) {
-    return (
-      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-        <PregnancyShape type={pregnancyType} />
-        {isSelected && <SelectionRing shape="triangle" />}
-      </svg>
-    )
-  }
+  // Pregnancy shapes disabled until UI toggle exists
+  // if (pregnancyType) {
+  //   return (
+  //     <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+  //       <PregnancyShape type={pregnancyType} />
+  //       {isSelected && <SelectionRing shape="triangle" />}
+  //     </svg>
+  //   )
+  // }
 
   return (
     <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} overflow="visible">
@@ -69,19 +70,17 @@ export function PersonSymbol({ person, isSelected, isHighlighted }: Props) {
                 width={SIZE}
                 height={bandHeight}
                 fill={color}
-                opacity={cond.suspected ? 0.25 : 0.5}
+                opacity={0.5}  /* suspected toggle disabled until UI exists */
               />
             )
           })}
-          {/* Recovery slash overlay */}
+          {/* Recovery arrow — disabled until UI toggle exists
           {conditions.some((c) => c.inRecovery) && (
-            <line
-              x1={HALF - 15} y1={SIZE - 5}
-              x2={HALF + 15} y2={5}
-              stroke="white"
-              strokeWidth={3}
-            />
-          )}
+            <g>
+              <line x1={HALF - 12} y1={SIZE - 8} x2={HALF + 12} y2={8} stroke="white" strokeWidth={2} opacity={0.85} />
+              <polygon points={`${HALF + 12},${8} ${HALF + 6},${10} ${HALF + 10},${14}`} fill="white" opacity={0.85} />
+            </g>
+          )} */}
         </g>
       )}
 

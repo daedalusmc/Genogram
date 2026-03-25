@@ -5,6 +5,7 @@ export interface EdgeRoute {
   targetHandle: string | null  // snap point ID on target, null = auto
   waypoints: Array<{ x: number; y: number }>  // intermediate points the line passes through
   labelOffset?: { x: number; y: number }  // manual label offset from computed midpoint
+  routeIsManual?: boolean  // true = user manually dragged waypoints, auto-router skips this edge
 }
 
 export interface ChildConnection {

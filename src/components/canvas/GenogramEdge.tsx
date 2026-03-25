@@ -176,7 +176,7 @@ export function GenogramEdge({
         if (!rel) return
         const newWp = [...rel.route.waypoints]
         newWp.splice(insertIdx, 0, { x: lineDragRef.current.origX, y: lineDragRef.current.origY })
-        updateEdgeRoute(edgeKind === 'child' ? 'structural' : edgeKind, relId, { waypoints: newWp })
+        updateEdgeRoute(edgeKind === 'child' ? 'structural' : edgeKind, relId, { waypoints: newWp, routeIsManual: true })
       }
 
       if (lineDragRef.current.isDragging) {

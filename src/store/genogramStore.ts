@@ -77,6 +77,7 @@ interface GenogramStore {
   setNodePositions: (positions: Record<string, { x: number; y: number }>) => void
   setEdgeWaypoint: (edgeId: string, waypoint: { dropX?: number; barY?: number }) => void
   updateEdgeRoute: (relType: 'structural' | 'emotional', relId: string, route: Partial<import('../types/relationship').EdgeRoute>) => void
+  batchUpdateEdgeRoutes: (updates: Array<{ relType: 'structural' | 'emotional'; relId: string; route: Partial<import('../types/relationship').EdgeRoute> }>) => void
   convertToEmotional: (structRelId: string, emotionalType: import('../types/enums').EmotionalRelType) => string | null
   convertToStructural: (emoRelId: string, structuralType: import('../types/enums').StructuralRelType) => string | null
   triggerAutoLayout: () => void
@@ -536,6 +537,33 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
             [relId]: { ...rel, route: { ...rel.route, ...routeUpdate } },
           },
         }
+      }
+    })
+    get().saveToLocalStorage()
+  },
+
+  batchUpdateEdgeRoutes: (updates) => {
+    set((state) => {
+      const newStructural = { ...state.structuralRelationships }
+      const newEmotional = { ...state.emotionalRelationships }
+
+      for (const { relType, relId, route } of updates) {
+        if (relType === 'structural' && newStructural[relId]) {
+          newStructural[relId] = {
+            ...newStructural[relId],
+            route: { ...newStructural[relId].route, ...route },
+          }
+        } else if (relType === 'emotional' && newEmotional[relId]) {
+          newEmotional[relId] = {
+            ...newEmotional[relId],
+            route: { ...newEmotional[relId].route, ...route },
+          }
+        }
+      }
+
+      return {
+        structuralRelationships: newStructural,
+        emotionalRelationships: newEmotional,
       }
     })
     get().saveToLocalStorage()

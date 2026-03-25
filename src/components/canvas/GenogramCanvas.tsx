@@ -23,6 +23,7 @@ import { GenogramEdge } from './GenogramEdge'
 import { STRUCTURAL_EDGE_STYLES, EMOTIONAL_EDGE_STYLES } from '../../constants/relationshipStyles'
 import { StructuralRelType } from '../../types/enums'
 import { useAutoLayout } from '../../hooks/useAutoLayout'
+import { computeAllEdgeRoutes } from '../../utils/edgeRouter'
 
 const nodeTypes: NodeTypes = {
   person: PersonNodeMemo,
@@ -65,14 +66,21 @@ export function GenogramCanvas() {
   const selectPerson = useGenogramStore((s) => s.selectPerson)
   const setNodePosition = useGenogramStore((s) => s.setNodePosition)
   const setNodePositions = useGenogramStore((s) => s.setNodePositions)
+  const batchUpdateEdgeRoutes = useGenogramStore((s) => s.batchUpdateEdgeRoutes)
 
   const { layoutNodes } = useAutoLayout()
   const { fitView } = useReactFlow()
 
-  // Auto-layout for new nodes
+  // Track previous layoutVersion to detect full re-layout
+  const prevLayoutVersionRef = useRef(layoutVersion)
+
+  // Auto-layout for new nodes + edge routing on full re-layout
   useEffect(() => {
     const personIds = Object.keys(persons)
     const needsLayout = personIds.some((id) => !nodePositions[id])
+    const isFullReLayout = layoutVersion !== prevLayoutVersionRef.current
+    prevLayoutVersionRef.current = layoutVersion
+
     if (needsLayout && personIds.length > 0) {
       const computed = layoutNodes(persons, structuralRels)
       const newPositions: Record<string, { x: number; y: number }> = { ...nodePositions }
@@ -82,6 +90,31 @@ export function GenogramCanvas() {
         }
       }
       setNodePositions(newPositions)
+
+      // On full re-layout, also compute smart edge routes
+      if (isFullReLayout) {
+        const allPositions = { ...newPositions }
+        // Use computed positions for all nodes
+        for (const id of personIds) {
+          if (computed[id]) allPositions[id] = computed[id]
+        }
+
+        const routes = computeAllEdgeRoutes(allPositions, structuralRels, emotionalRels)
+
+        // Build batch updates
+        const updates: Array<{ relType: 'structural' | 'emotional'; relId: string; route: Partial<import('../../types/relationship').EdgeRoute> }> = []
+
+        for (const [relId, route] of Object.entries(routes.structural)) {
+          updates.push({ relType: 'structural', relId, route })
+        }
+        for (const [relId, route] of Object.entries(routes.emotional)) {
+          updates.push({ relType: 'emotional', relId, route })
+        }
+
+        if (updates.length > 0) {
+          batchUpdateEdgeRoutes(updates)
+        }
+      }
     }
   }, [Object.keys(persons).length, layoutVersion])
 
