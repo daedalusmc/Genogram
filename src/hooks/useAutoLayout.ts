@@ -3,10 +3,30 @@ import type { Person } from '../types/person'
 import type { StructuralRelationship } from '../types/relationship'
 
 const NODE_WIDTH = 120
-const NODE_HEIGHT = 100
-const GENERATION_GAP = 220
-const COUPLE_GAP = 160
-const SIBLING_GAP = 140
+const GENERATION_GAP = 240
+const COUPLE_GAP = 40      // gap between partners in a couple
+const SIBLING_GAP = 80     // gap between siblings
+const FAMILY_GAP = 120     // gap between separate root family branches
+const COUPLE_UNIT_W = NODE_WIDTH * 2 + COUPLE_GAP
+
+/**
+ * Tree-based genogram auto-layout.
+ *
+ * 1. Build "family unit" trees: couple → children → their families
+ * 2. Bottom-up: compute subtree widths
+ * 3. Top-down: position couples centered over their children
+ * 4. Cross-branch marriages: when a child marries someone from another branch,
+ *    the marriage is assigned to whichever branch claims it first.
+ *    The marrying-in spouse is pulled into that branch's subtree.
+ */
+
+interface FamilyUnit {
+  relId: string
+  leftId: string
+  rightId: string
+  childUnits: FamilyUnit[]
+  leafChildren: string[]
+}
 
 export function useAutoLayout() {
   const layoutNodes = useCallback((
@@ -16,112 +36,237 @@ export function useAutoLayout() {
     const personList = Object.values(persons)
     if (personList.length === 0) return {}
 
-    // Simple hierarchical layout without dagre (which crashes on complex graphs)
-    // Strategy: place couples side by side, children centered below
-
     const positions: Record<string, { x: number; y: number }> = {}
     const placed = new Set<string>()
 
-    // 1. Identify generations: people in couples are generation based on their .generation field
-    //    Children are one generation below their parents
-    const childOf = new Map<string, string>() // childId -> relId
+    // --- Lookup maps ---
+
+    // childId → relId (the couple this person is a child of)
+    const childOfRel = new Map<string, string>()
     for (const rel of Object.values(structuralRels)) {
       for (const child of rel.children) {
-        childOf.set(child.childId, rel.id)
+        childOfRel.set(child.childId, rel.id)
       }
     }
 
-    // 2. Group by generation
-    const generations: Record<number, string[]> = {}
-    for (const person of personList) {
-      const gen = person.generation
-      if (!generations[gen]) generations[gen] = []
-      generations[gen].push(person.id)
+    // personId → relIds (couples this person is a partner in)
+    const partnerInRel = new Map<string, string[]>()
+    for (const rel of Object.values(structuralRels)) {
+      if (!partnerInRel.has(rel.person1Id)) partnerInRel.set(rel.person1Id, [])
+      if (!partnerInRel.has(rel.person2Id)) partnerInRel.set(rel.person2Id, [])
+      partnerInRel.get(rel.person1Id)!.push(rel.id)
+      partnerInRel.get(rel.person2Id)!.push(rel.id)
     }
 
-    // 3. Layout each generation
-    const genKeys = Object.keys(generations).map(Number).sort((a, b) => a - b)
+    // --- Determine left/right in a couple (male convention: male on left) ---
 
-    for (const gen of genKeys) {
-      const genY = gen * GENERATION_GAP
-      const ids = generations[gen]
+    const MALE_TYPES = new Set(['male', 'gay-male', 'trans-ftm'])
 
-      // Find couples in this generation
-      const couplesInGen: StructuralRelationship[] = []
-      const inCouple = new Set<string>()
+    function determineLR(rel: StructuralRelationship): [string, string] {
+      const p1 = persons[rel.person1Id]
+      const p2 = persons[rel.person2Id]
+      if (!p1 || !p2) return [rel.person1Id, rel.person2Id]
+      if (!MALE_TYPES.has(p1.gender) && MALE_TYPES.has(p2.gender)) {
+        return [rel.person2Id, rel.person1Id]
+      }
+      return [rel.person1Id, rel.person2Id]
+    }
 
-      for (const rel of Object.values(structuralRels)) {
-        if (ids.includes(rel.person1Id) && ids.includes(rel.person2Id)) {
-          couplesInGen.push(rel)
-          inCouple.add(rel.person1Id)
-          inCouple.add(rel.person2Id)
+    // --- Build family unit trees ---
+
+    const visitedRels = new Set<string>()
+    const assignedToBranch = new Set<string>() // person IDs assigned to a branch
+
+    function buildFamilyUnit(relId: string): FamilyUnit | null {
+      if (visitedRels.has(relId)) return null
+      visitedRels.add(relId)
+
+      const rel = structuralRels[relId]
+      if (!rel) return null
+
+      const [leftId, rightId] = determineLR(rel)
+      assignedToBranch.add(leftId)
+      assignedToBranch.add(rightId)
+
+      const childUnits: FamilyUnit[] = []
+      const leafChildren: string[] = []
+
+      // Sort children by birth date or creation order for consistent layout
+      const sortedChildren = [...rel.children].sort((a, b) => {
+        const pa = persons[a.childId]
+        const pb = persons[b.childId]
+        if (!pa || !pb) return 0
+        if (pa.dateOfBirth && pb.dateOfBirth) return pa.dateOfBirth.localeCompare(pb.dateOfBirth)
+        return 0
+      })
+
+      for (const child of sortedChildren) {
+        const cid = child.childId
+        if (!persons[cid]) continue
+
+        // Does this child have their own couple?
+        const childRels = partnerInRel.get(cid) || []
+        let childHasFamily = false
+
+        for (const childRelId of childRels) {
+          const fu = buildFamilyUnit(childRelId)
+          if (fu) {
+            childUnits.push(fu)
+            childHasFamily = true
+          }
+        }
+
+        if (!childHasFamily) {
+          leafChildren.push(cid)
+          assignedToBranch.add(cid)
         }
       }
 
-      // Singles in this generation (not in any couple)
-      const singles = ids.filter((id) => !inCouple.has(id))
+      return { relId, leftId, rightId, childUnits, leafChildren }
+    }
 
-      // Place couples first
-      let xCursor = 0
+    // Find root couples: couples where neither partner is a child of another couple,
+    // OR the oldest generation couples
+    const relList = Object.values(structuralRels)
 
-      for (const rel of couplesInGen) {
-        const person1 = persons[rel.person1Id]
-        const person2 = persons[rel.person2Id]
-        if (!person1 || !person2) continue
+    // Sort: prioritize couples with no parents, then by generation
+    const sortedRels = [...relList].sort((a, b) => {
+      const aP1Child = childOfRel.has(a.person1Id)
+      const aP2Child = childOfRel.has(a.person2Id)
+      const bP1Child = childOfRel.has(b.person1Id)
+      const bP2Child = childOfRel.has(b.person2Id)
 
-        // Determine left/right by gender convention (male left)
-        const p1IsMale = ['male', 'gay-male', 'trans-ftm'].includes(person1.gender)
-        const p2IsMale = ['male', 'gay-male', 'trans-ftm'].includes(person2.gender)
+      const aIsRoot = !aP1Child && !aP2Child
+      const bIsRoot = !bP1Child && !bP2Child
 
-        let leftId = rel.person1Id
-        let rightId = rel.person2Id
-        if (!p1IsMale && p2IsMale) {
-          leftId = rel.person2Id
-          rightId = rel.person1Id
-        }
+      if (aIsRoot && !bIsRoot) return -1
+      if (!aIsRoot && bIsRoot) return 1
 
-        positions[leftId] = { x: xCursor, y: genY }
-        positions[rightId] = { x: xCursor + COUPLE_GAP, y: genY }
-        placed.add(leftId)
-        placed.add(rightId)
+      const aGen = Math.min(
+        persons[a.person1Id]?.generation ?? 99,
+        persons[a.person2Id]?.generation ?? 99
+      )
+      const bGen = Math.min(
+        persons[b.person1Id]?.generation ?? 99,
+        persons[b.person2Id]?.generation ?? 99
+      )
+      return aGen - bGen
+    })
 
-        // Center children below this couple
-        if (rel.children.length > 0) {
-          const lineMidX = (xCursor + NODE_WIDTH + xCursor + COUPLE_GAP) / 2
-          const childY = genY + GENERATION_GAP
-          const totalChildWidth = rel.children.length * NODE_WIDTH + (rel.children.length - 1) * SIBLING_GAP
-          const childStartX = lineMidX - totalChildWidth / 2
+    const rootUnits: FamilyUnit[] = []
+    for (const rel of sortedRels) {
+      if (visitedRels.has(rel.id)) continue
+      const unit = buildFamilyUnit(rel.id)
+      if (unit) rootUnits.push(unit)
+    }
 
-          rel.children.forEach((child, i) => {
-            if (persons[child.childId]) {
-              positions[child.childId] = {
-                x: childStartX + i * (NODE_WIDTH + SIBLING_GAP),
-                y: childY,
-              }
-              placed.add(child.childId)
-            }
-          })
-        }
+    // --- Compute subtree widths (bottom-up) ---
 
-        xCursor += COUPLE_GAP + NODE_WIDTH + SIBLING_GAP
+    const unitWidths = new Map<string, number>()
+
+    function computeWidth(unit: FamilyUnit): number {
+      let childrenWidth = 0
+
+      for (const cu of unit.childUnits) {
+        if (childrenWidth > 0) childrenWidth += SIBLING_GAP
+        childrenWidth += computeWidth(cu)
       }
 
-      // Place singles after couples
-      for (const id of singles) {
-        if (!placed.has(id)) {
-          positions[id] = { x: xCursor, y: genY }
-          placed.add(id)
-          xCursor += NODE_WIDTH + SIBLING_GAP
+      for (let i = 0; i < unit.leafChildren.length; i++) {
+        if (childrenWidth > 0) childrenWidth += SIBLING_GAP
+        childrenWidth += NODE_WIDTH
+      }
+
+      // The couple itself needs at minimum COUPLE_UNIT_W
+      const width = Math.max(COUPLE_UNIT_W, childrenWidth)
+      unitWidths.set(unit.relId, width)
+      return width
+    }
+
+    for (const root of rootUnits) {
+      computeWidth(root)
+    }
+
+    // --- Position nodes (top-down) ---
+
+    function positionUnit(unit: FamilyUnit, centerX: number, y: number) {
+      // Place the couple centered at centerX
+      const coupleLeftX = centerX - COUPLE_UNIT_W / 2
+      positions[unit.leftId] = { x: coupleLeftX, y }
+      positions[unit.rightId] = { x: coupleLeftX + NODE_WIDTH + COUPLE_GAP, y }
+      placed.add(unit.leftId)
+      placed.add(unit.rightId)
+
+      // Gather all children with their widths
+      const childEntries: { type: 'unit' | 'leaf'; unit?: FamilyUnit; id?: string; width: number }[] = []
+
+      for (const cu of unit.childUnits) {
+        childEntries.push({
+          type: 'unit',
+          unit: cu,
+          width: unitWidths.get(cu.relId) || COUPLE_UNIT_W,
+        })
+      }
+      for (const lid of unit.leafChildren) {
+        childEntries.push({
+          type: 'leaf',
+          id: lid,
+          width: NODE_WIDTH,
+        })
+      }
+
+      if (childEntries.length === 0) return
+
+      const totalChildWidth = childEntries.reduce((a, e) => a + e.width, 0) +
+        (childEntries.length - 1) * SIBLING_GAP
+
+      let childX = centerX - totalChildWidth / 2
+      const childY = y + GENERATION_GAP
+
+      for (const entry of childEntries) {
+        if (entry.type === 'unit' && entry.unit) {
+          const childCenterX = childX + entry.width / 2
+          positionUnit(entry.unit, childCenterX, childY)
+        } else if (entry.type === 'leaf' && entry.id) {
+          positions[entry.id] = { x: childX, y: childY }
+          placed.add(entry.id)
         }
+        childX += entry.width + SIBLING_GAP
       }
     }
 
-    // 4. Place any remaining unplaced people
-    let xFallback = 0
-    for (const person of personList) {
-      if (!placed.has(person.id)) {
-        positions[person.id] = { x: xFallback, y: person.generation * GENERATION_GAP }
-        xFallback += NODE_WIDTH + SIBLING_GAP
+    // Position root units side by side
+    let rootX = 0
+    for (const root of rootUnits) {
+      const w = unitWidths.get(root.relId) || COUPLE_UNIT_W
+      const centerX = rootX + w / 2
+
+      const p1Gen = persons[root.leftId]?.generation ?? 0
+      const p2Gen = persons[root.rightId]?.generation ?? 0
+      const rootY = Math.min(p1Gen, p2Gen) * GENERATION_GAP
+
+      positionUnit(root, centerX, rootY)
+      rootX += w + FAMILY_GAP
+    }
+
+    // --- Place remaining unplaced people ---
+    // Group by generation for a cleaner fallback
+    const unplaced = personList.filter((p) => !placed.has(p.id))
+    if (unplaced.length > 0) {
+      const genGroups: Record<number, Person[]> = {}
+      for (const p of unplaced) {
+        if (!genGroups[p.generation]) genGroups[p.generation] = []
+        genGroups[p.generation].push(p)
+      }
+
+      let fallbackX = rootX + FAMILY_GAP
+      for (const gen of Object.keys(genGroups).map(Number).sort((a, b) => a - b)) {
+        let x = fallbackX
+        for (const p of genGroups[gen]) {
+          positions[p.id] = { x, y: gen * GENERATION_GAP }
+          placed.add(p.id)
+          x += NODE_WIDTH + SIBLING_GAP
+        }
       }
     }
 
