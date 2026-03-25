@@ -99,8 +99,12 @@ export function PersonSymbol({ person, isSelected, isHighlighted }: Props) {
       {/* 5. Stroke outline always visible on top */}
       <GenderShape gender={gender} fill="none" stroke="var(--node-stroke, #374151)" strokeWidth={2.5} />
 
-      {/* 6. Deceased X on top */}
-      {isDeceased && <DeceasedX />}
+      {/* 6. Deceased X on top — clipped to shape bounds */}
+      {isDeceased && (
+        <g clipPath={`url(#photo-clip-${person.id})`}>
+          <DeceasedX />
+        </g>
+      )}
 
       {/* 7. Selection ring */}
       {isSelected && <SelectionRing shape={getShape(gender)} />}

@@ -369,9 +369,9 @@ export function GenogramEdge({
         </defs>
       )}
 
-      {/* Invisible drag/click hit area — pointerEvents: all to override React Flow's visiblestroke */}
-      <path d={pathD} fill="none" stroke="rgba(0,0,0,0.001)" strokeWidth={18}
-        style={{ cursor: 'pointer', pointerEvents: 'all' }}
+      {/* Invisible drag/click hit area — stroke only, so nodes rendered above can receive clicks */}
+      <path d={pathD} fill="none" stroke="transparent" strokeWidth={18}
+        style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
         onPointerDown={onLinePointerDown} />
 
       {/* Main visible path */}
@@ -407,14 +407,14 @@ export function GenogramEdge({
       {label && (
         <g
           onPointerDown={onLabelPointerDown}
-          style={{ cursor: 'grab', pointerEvents: 'all' }}
+          style={{ cursor: 'grab', pointerEvents: 'painted' }}
         >
           {/* Invisible wider hit area for easier grabbing */}
           <rect
             x={finalLabelX - 40} y={finalLabelY - 22}
             width={80} height={20}
             fill="rgba(255,255,255,0.01)"
-            style={{ pointerEvents: 'all' }}
+            style={{ pointerEvents: 'painted' }}
           />
           {/* Background pill for readability */}
           <rect
