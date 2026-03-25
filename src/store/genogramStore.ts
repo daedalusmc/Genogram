@@ -237,8 +237,21 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
 
   addPerson: (gender, generation = 0) => {
     const person = createDefaultPerson(gender, generation)
+    // Place new person near existing nodes or at a default position
+    const state = get()
+    const existingPositions = Object.values(state.nodePositions)
+    let x = 200
+    let y = 100
+    if (existingPositions.length > 0) {
+      // Place to the right of the rightmost existing node
+      const maxX = Math.max(...existingPositions.map((p) => p.x))
+      const avgY = existingPositions.reduce((sum, p) => sum + p.y, 0) / existingPositions.length
+      x = maxX + 200
+      y = avgY
+    }
     set((state) => ({
       persons: { ...state.persons, [person.id]: person },
+      nodePositions: { ...state.nodePositions, [person.id]: { x, y } },
     }))
     get().saveSnapshot()
     return person.id

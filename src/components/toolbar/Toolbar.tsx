@@ -157,7 +157,7 @@ export function Toolbar() {
   if (ui.isPresentationMode) return null
 
   return (
-    <div className="px-4 py-2 flex items-center gap-2 flex-wrap backdrop-blur-xl"
+    <div className="px-4 py-2 flex items-center gap-2 flex-wrap backdrop-blur-xl relative z-50"
       style={{
         backgroundColor: ui.isDarkMode ? 'rgba(15,23,42,0.85)' : 'rgba(255,255,255,0.85)',
         borderBottom: '1px solid var(--border)',
