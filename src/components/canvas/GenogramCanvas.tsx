@@ -153,7 +153,11 @@ export function GenogramCanvas() {
     'emo-top': 'top-center',
     'emo-bottom': 'bottom-center',
   }
-  const toSnapId = (id: string): string => ALIAS_TO_SNAP[id] || id
+  const toSnapId = (id: string): string => {
+    // Strip -tgt suffix first, then resolve aliases
+    const clean = id.endsWith('-tgt') ? id.slice(0, -4) : id
+    return ALIAS_TO_SNAP[clean] || clean
+  }
   const resolveSourceHandle = (snapId: string): string => toSnapId(snapId)
   const resolveTargetHandle = (snapId: string): string => `${toSnapId(snapId)}-tgt`
 
@@ -357,11 +361,13 @@ export function GenogramCanvas() {
     const { source, target, sourceHandle, targetHandle } = connection
     if (!source || !target || source === target) return
 
-    // Get the base snap point ID (strip -tgt suffix from target handles)
-    const srcSnap = sourceHandle || 'right-center'
-    const tgtSnap = targetHandle?.endsWith('-tgt')
-      ? targetHandle.slice(0, -4)
-      : (targetHandle || 'left-center')
+    // Strip -tgt suffix from both handles (ConnectionMode.Loose allows dragging from any handle type)
+    const stripTgt = (h: string | null | undefined, fallback: string): string => {
+      if (!h) return fallback
+      return h.endsWith('-tgt') ? h.slice(0, -4) : h
+    }
+    const srcSnap = stripTgt(sourceHandle, 'right-center')
+    const tgtSnap = stripTgt(targetHandle, 'left-center')
 
     // Always create as structural (Marriage) by default
     // User can switch to Emotional via the line's context menu
