@@ -121,8 +121,9 @@ function PersonNodeComponent({ data, selected }: NodeProps<PersonNodeType>) {
   const formatDate = (date: string | null) => {
     if (!date) return ''
     try {
-      const d = new Date(date)
-      return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`
+      // Split the ISO date string to avoid timezone offset issues
+      const [y, m, d] = date.split('-').map(Number)
+      return `${m}/${d}/${y}`
     } catch {
       return date
     }

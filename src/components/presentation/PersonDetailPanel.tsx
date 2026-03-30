@@ -10,8 +10,10 @@ import {
 
 function formatDate(d: string | null): string {
   if (!d) return ''
-  const date = new Date(d + 'T00:00:00')
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  // Split the ISO date string to avoid timezone offset issues
+  const [y, m, day] = d.split('-').map(Number)
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  return `${months[m - 1]} ${day}, ${y}`
 }
 
 interface PersonDetailPanelProps {
