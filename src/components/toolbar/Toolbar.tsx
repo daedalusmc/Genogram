@@ -3,6 +3,50 @@ import { Gender } from '../../types/enums'
 import { useGenogramStore } from '../../store/genogramStore'
 import { useReactFlow } from '@xyflow/react'
 
+function ClearButton() {
+  const [confirming, setConfirming] = useState(false)
+  const resetData = useGenogramStore((s) => s.resetData)
+  const personCount = useGenogramStore((s) => Object.keys(s.persons).length)
+
+  if (personCount === 0) return null
+
+  if (!confirming) {
+    return (
+      <button
+        onClick={() => setConfirming(true)}
+        className="px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150"
+        style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-secondary)' }}
+        title="Clear the canvas and start fresh"
+      >
+        Clear
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1 px-2 py-1 rounded-full"
+      style={{ backgroundColor: 'var(--danger-soft)', border: '1px solid var(--danger)' }}>
+      <span className="text-xs font-medium" style={{ color: 'var(--danger)' }}>
+        Clear everything?
+      </span>
+      <button
+        onClick={() => { resetData(); setConfirming(false) }}
+        className="px-2 py-0.5 rounded-full text-xs font-semibold"
+        style={{ backgroundColor: 'var(--danger)', color: '#fff' }}
+      >
+        Yes
+      </button>
+      <button
+        onClick={() => setConfirming(false)}
+        className="px-2 py-0.5 rounded-full text-xs font-medium"
+        style={{ color: 'var(--text-secondary)' }}
+      >
+        Cancel
+      </button>
+    </div>
+  )
+}
+
 const GENDER_OPTIONS = [
   { gender: Gender.Male, label: 'Male' },
   { gender: Gender.Female, label: 'Female' },
@@ -213,6 +257,7 @@ export function Toolbar() {
         <PillBtn onClick={handleImport}>Import</PillBtn>
         <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
         <PillBtn onClick={handleExport}>Export</PillBtn>
+        <ClearButton />
       </div>
 
       <Sep />

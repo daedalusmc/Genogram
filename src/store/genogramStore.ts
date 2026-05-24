@@ -89,6 +89,7 @@ interface GenogramStore {
   importJSON: (json: string) => void
   saveToLocalStorage: () => void
   loadFromLocalStorage: () => boolean
+  resetData: () => void
 }
 
 const DEFAULT_UI: UIState = {
@@ -736,5 +737,28 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
     } catch {
       return false
     }
+  },
+
+  resetData: () => {
+    set((state) => ({
+      persons: {},
+      structuralRelationships: {},
+      emotionalRelationships: {},
+      presentationOrder: [],
+      nodePositions: {},
+      edgeWaypoints: {},
+      ui: {
+        ...state.ui,
+        selectedPersonId: null,
+        selectedRelationshipId: null,
+        isPanelOpen: false,
+        panelMode: null,
+        isAddingRelationship: false,
+        relationshipSourceId: null,
+        addRelationshipType: null,
+        addChildToRelId: null,
+      },
+    }))
+    get().saveToLocalStorage()
   },
 }))
