@@ -38,10 +38,6 @@ interface GenogramStore {
   // UI
   ui: UIState
 
-  // Undo
-  history: string[]
-  historyIndex: number
-
   // Actions - Persons
   addPerson: (gender: Gender, generation?: number) => string
   updatePerson: (id: string, updates: Partial<Person>) => void
@@ -89,9 +85,6 @@ interface GenogramStore {
   setPresentationOrder: (order: string[]) => void
 
   // Actions - Persistence
-  saveSnapshot: () => void
-  undo: () => void
-  redo: () => void
   exportJSON: () => string
   importJSON: (json: string) => void
   saveToLocalStorage: () => void
@@ -237,8 +230,6 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
   edgeWaypoints: {},
   layoutVersion: 0,
   ui: { ...DEFAULT_UI },
-  history: [],
-  historyIndex: -1,
 
   addPerson: (gender, generation = 0) => {
     const person = createDefaultPerson(gender, generation)
@@ -258,7 +249,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
       persons: { ...state.persons, [person.id]: person },
       nodePositions: { ...state.nodePositions, [person.id]: { x, y } },
     }))
-    get().saveSnapshot()
+    get().saveToLocalStorage()
     return person.id
   },
 
@@ -269,7 +260,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
         [id]: { ...state.persons[id], ...updates },
       },
     }))
-    get().saveSnapshot()
+    get().saveToLocalStorage()
   },
 
   removePerson: (id) => {
@@ -307,7 +298,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
         ui: state.ui.selectedPersonId === id ? { ...state.ui, selectedPersonId: null, isPanelOpen: false, panelMode: null } : state.ui,
       }
     })
-    get().saveSnapshot()
+    get().saveToLocalStorage()
   },
 
   addStructuralRelationship: (person1Id, person2Id, type) => {
@@ -343,7 +334,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
     set((state) => ({
       structuralRelationships: { ...state.structuralRelationships, [id]: rel },
     }))
-    get().saveSnapshot()
+    get().saveToLocalStorage()
     return id
   },
 
@@ -354,7 +345,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
         [id]: { ...state.structuralRelationships[id], ...updates },
       },
     }))
-    get().saveSnapshot()
+    get().saveToLocalStorage()
   },
 
   removeStructuralRelationship: (id) => {
@@ -366,7 +357,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
         persons: syncPersonParentRefs(state.persons, newRels),
       }
     })
-    get().saveSnapshot()
+    get().saveToLocalStorage()
   },
 
   addChildToRelationship: (relId, childId, connectionType) => {
@@ -383,7 +374,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
         persons: syncPersonParentRefs(state.persons, newStructural),
       }
     })
-    get().saveSnapshot()
+    get().saveToLocalStorage()
   },
 
   removeChildFromRelationship: (relId, childId) => {
@@ -399,7 +390,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
         persons: syncPersonParentRefs(state.persons, newStructural),
       }
     })
-    get().saveSnapshot()
+    get().saveToLocalStorage()
   },
 
   addEmotionalRelationship: (person1Id, person2Id, type) => {
@@ -429,7 +420,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
     set((state) => ({
       emotionalRelationships: { ...state.emotionalRelationships, [id]: rel },
     }))
-    get().saveSnapshot()
+    get().saveToLocalStorage()
     return id
   },
 
@@ -440,7 +431,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
         [id]: { ...state.emotionalRelationships[id], ...updates },
       },
     }))
-    get().saveSnapshot()
+    get().saveToLocalStorage()
   },
 
   removeEmotionalRelationship: (id) => {
@@ -449,7 +440,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
       delete newRels[id]
       return { emotionalRelationships: newRels }
     })
-    get().saveSnapshot()
+    get().saveToLocalStorage()
   },
 
   selectPerson: (id) => {
@@ -669,28 +660,6 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
 
   triggerAutoLayout: () => {
     set((state) => ({ layoutVersion: state.layoutVersion + 1 }))
-  },
-
-  saveSnapshot: () => {
-    // Debounce auto-save
-    const state = get()
-    state.saveToLocalStorage()
-  },
-
-  undo: () => {
-    const { history, historyIndex } = get()
-    if (historyIndex > 0) {
-      const prev = JSON.parse(history[historyIndex - 1])
-      set({ ...prev, historyIndex: historyIndex - 1, history })
-    }
-  },
-
-  redo: () => {
-    const { history, historyIndex } = get()
-    if (historyIndex < history.length - 1) {
-      const next = JSON.parse(history[historyIndex + 1])
-      set({ ...next, historyIndex: historyIndex + 1, history })
-    }
   },
 
   exportJSON: () => {
