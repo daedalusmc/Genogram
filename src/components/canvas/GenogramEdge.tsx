@@ -550,19 +550,56 @@ export function GenogramEdge({
   )
 }
 
+// 8 snap point positions on a 56x56 box, relative to the box's top-left corner.
+const SNAP_POSITIONS: Record<string, { x: number; y: number }> = {
+  'top-left':      { x: 0,  y: 0  },
+  'top-center':    { x: 28, y: 0  },
+  'top-right':     { x: 56, y: 0  },
+  'left-center':   { x: 0,  y: 28 },
+  'right-center':  { x: 56, y: 28 },
+  'bottom-left':   { x: 0,  y: 56 },
+  'bottom-center': { x: 28, y: 56 },
+  'bottom-right':  { x: 56, y: 56 },
+}
+const SNAP_IDS = Object.keys(SNAP_POSITIONS)
+
 function UnifiedRelMenu({ edgeKind, relId, relType, onClose }: {
   edgeKind: 'structural' | 'emotional'
   relId: string
   relType: string
   onClose: () => void
 }) {
-  const [category, setCategory] = useState<'familial' | 'emotional'>(edgeKind === 'structural' ? 'familial' : 'emotional')
+  const [typeOpen, setTypeOpen] = useState(false)
+  const rel = useGenogramStore((s) =>
+    edgeKind === 'structural' ? s.structuralRelationships[relId] : s.emotionalRelationships[relId]
+  )
   const updateStructuralRelationship = useGenogramStore((s) => s.updateStructuralRelationship)
   const removeStructuralRelationship = useGenogramStore((s) => s.removeStructuralRelationship)
   const updateEmotionalRelationship = useGenogramStore((s) => s.updateEmotionalRelationship)
   const removeEmotionalRelationship = useGenogramStore((s) => s.removeEmotionalRelationship)
   const convertToEmotional = useGenogramStore((s) => s.convertToEmotional)
   const convertToStructural = useGenogramStore((s) => s.convertToStructural)
+  const updateEdgeRoute = useGenogramStore((s) => s.updateEdgeRoute)
+
+  if (!rel) return null
+
+  const currentLabel = edgeKind === 'structural'
+    ? STRUCTURAL_REL_LABELS[relType as StructuralRelType] || relType
+    : EMOTIONAL_REL_LABELS[relType as EmotionalRelType] || relType
+
+  const sourceHandle = rel.route?.sourceHandle || 'right-center'
+  const targetHandle = rel.route?.targetHandle || 'left-center'
+
+  const handleType = (newType: string, newKind: 'structural' | 'emotional') => {
+    if (newKind === 'structural') {
+      if (edgeKind === 'structural') updateStructuralRelationship(relId, { type: newType as StructuralRelType })
+      else convertToStructural(relId, newType as StructuralRelType)
+    } else {
+      if (edgeKind === 'emotional') updateEmotionalRelationship(relId, { type: newType as EmotionalRelType })
+      else convertToEmotional(relId, newType as EmotionalRelType)
+    }
+    setTypeOpen(false)
+  }
 
   const handleDelete = () => {
     if (edgeKind === 'structural') removeStructuralRelationship(relId)
@@ -571,135 +608,199 @@ function UnifiedRelMenu({ edgeKind, relId, relType, onClose }: {
   }
 
   return (
-    <>
-      {/* Category toggle */}
-      <div className="flex mb-1" style={{ borderBottom: '1px solid var(--border)' }}>
-        <button
-          onClick={() => setCategory('familial')}
-          className="flex-1 px-3 py-1.5 text-xs font-semibold transition-colors"
-          style={{ color: category === 'familial' ? 'var(--accent)' : 'var(--text-muted)', borderBottom: category === 'familial' ? '2px solid var(--accent)' : '2px solid transparent' }}>
-          Familial
-        </button>
-        <button
-          onClick={() => setCategory('emotional')}
-          className="flex-1 px-3 py-1.5 text-xs font-semibold transition-colors"
-          style={{ color: category === 'emotional' ? 'var(--accent)' : 'var(--text-muted)', borderBottom: category === 'emotional' ? '2px solid var(--accent)' : '2px solid transparent' }}>
-          Emotional
-        </button>
-      </div>
-
-      {/* Type list */}
-      <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-        {category === 'familial' && Object.entries(StructuralRelType).map(([, type]) => (
-          <button key={type}
-            onClick={() => {
-              if (edgeKind === 'structural') {
-                updateStructuralRelationship(relId, { type })
-              } else {
-                convertToStructural(relId, type)
-              }
-              onClose()
-            }}
-            className="block w-full text-left px-3 py-1 text-sm transition-colors"
+    <div className="p-2 w-64">
+      {/* Type display + dropdown trigger */}
+      <button
+        onClick={() => setTypeOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+        style={{
+          backgroundColor: 'var(--bg-hover)',
+          color: 'var(--text-primary)',
+          border: '1px solid var(--border)',
+        }}
+      >
+        <span className="flex items-center gap-2">
+          <span
+            className="inline-block w-3 h-0.5"
             style={{
-              color: edgeKind === 'structural' && relType === type ? 'var(--accent)' : 'var(--text-primary)',
-              backgroundColor: edgeKind === 'structural' && relType === type ? 'var(--accent-soft)' : 'transparent',
-              fontWeight: edgeKind === 'structural' && relType === type ? 500 : 400,
+              backgroundColor: edgeKind === 'emotional'
+                ? EMOTIONAL_EDGE_STYLES[relType as EmotionalRelType]?.stroke || 'var(--edge-color)'
+                : 'var(--edge-color)',
             }}
-            onMouseEnter={(e) => { if (!(edgeKind === 'structural' && relType === type)) e.currentTarget.style.backgroundColor = 'var(--bg-hover)' }}
-            onMouseLeave={(e) => { if (!(edgeKind === 'structural' && relType === type)) e.currentTarget.style.backgroundColor = 'transparent' }}>
-            {STRUCTURAL_REL_LABELS[type]}
-          </button>
-        ))}
-        {category === 'emotional' && Object.entries(EmotionalRelType).map(([, type]) => (
-          <button key={type}
-            onClick={() => {
-              if (edgeKind === 'emotional') {
-                updateEmotionalRelationship(relId, { type })
-              } else {
-                convertToEmotional(relId, type)
-              }
-              onClose()
-            }}
-            className="block w-full text-left px-3 py-1 text-sm transition-colors"
-            style={{
-              color: edgeKind === 'emotional' && relType === type ? 'var(--accent)' : 'var(--text-primary)',
-              backgroundColor: edgeKind === 'emotional' && relType === type ? 'var(--accent-soft)' : 'transparent',
-              fontWeight: edgeKind === 'emotional' && relType === type ? 500 : 400,
-            }}
-            onMouseEnter={(e) => { if (!(edgeKind === 'emotional' && relType === type)) e.currentTarget.style.backgroundColor = 'var(--bg-hover)' }}
-            onMouseLeave={(e) => { if (!(edgeKind === 'emotional' && relType === type)) e.currentTarget.style.backgroundColor = 'transparent' }}>
-            <span className="inline-block w-3 h-0.5 mr-2 align-middle"
-              style={{ backgroundColor: EMOTIONAL_EDGE_STYLES[type]?.stroke || 'var(--edge-color)' }} />
-            {EMOTIONAL_REL_LABELS[type]}
-          </button>
-        ))}
-      </div>
+          />
+          {currentLabel}
+        </span>
+        <span style={{ color: 'var(--text-muted)' }}>{typeOpen ? '▴' : '▾'}</span>
+      </button>
 
-      {/* Connection points */}
-      <div className="mt-1 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
-        <div className="px-3 py-1 text-xs uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>Connection Points</div>
-        <SnapPointPicker label="Source" relId={relId} relType={edgeKind} endpoint="source" onClose={onClose} />
-        <SnapPointPicker label="Target" relId={relId} relType={edgeKind} endpoint="target" onClose={onClose} />
+      {/* Type dropdown — single scrollable list with section headers */}
+      {typeOpen && (
+        <div
+          className="mt-1 rounded-lg"
+          style={{
+            maxHeight: 180,
+            overflowY: 'auto',
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+          }}
+        >
+          <div className="px-3 pt-1.5 pb-0.5 text-[10px] uppercase font-semibold tracking-wider"
+            style={{ color: 'var(--text-muted)' }}>Familial</div>
+          {Object.values(StructuralRelType).map((type) => {
+            const active = edgeKind === 'structural' && relType === type
+            return (
+              <button
+                key={type}
+                onClick={() => handleType(type, 'structural')}
+                className="block w-full text-left px-3 py-1 text-sm transition-colors"
+                style={{
+                  color: active ? 'var(--accent)' : 'var(--text-primary)',
+                  backgroundColor: active ? 'var(--accent-soft)' : 'transparent',
+                  fontWeight: active ? 500 : 400,
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = 'var(--bg-hover)' }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = 'transparent' }}
+              >
+                {STRUCTURAL_REL_LABELS[type]}
+              </button>
+            )
+          })}
+          <div className="px-3 pt-1.5 pb-0.5 text-[10px] uppercase font-semibold tracking-wider"
+            style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>Emotional</div>
+          {Object.values(EmotionalRelType).map((type) => {
+            const active = edgeKind === 'emotional' && relType === type
+            return (
+              <button
+                key={type}
+                onClick={() => handleType(type, 'emotional')}
+                className="flex items-center w-full text-left px-3 py-1 text-sm transition-colors"
+                style={{
+                  color: active ? 'var(--accent)' : 'var(--text-primary)',
+                  backgroundColor: active ? 'var(--accent-soft)' : 'transparent',
+                  fontWeight: active ? 500 : 400,
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = 'var(--bg-hover)' }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = 'transparent' }}
+              >
+                <span
+                  className="inline-block w-3 h-0.5 mr-2"
+                  style={{ backgroundColor: EMOTIONAL_EDGE_STYLES[type]?.stroke || 'var(--edge-color)' }}
+                />
+                {EMOTIONAL_REL_LABELS[type]}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Visual diagram: clickable snap points on source and target shapes */}
+      <div className="mt-2">
+        <div className="text-[10px] uppercase font-semibold tracking-wider mb-1"
+          style={{ color: 'var(--text-muted)' }}>Connection points</div>
+        <SnapDiagram
+          sourceHandle={sourceHandle}
+          targetHandle={targetHandle}
+          lineColor={
+            edgeKind === 'emotional'
+              ? EMOTIONAL_EDGE_STYLES[relType as EmotionalRelType]?.stroke || 'var(--edge-color)'
+              : 'var(--edge-color)'
+          }
+          onSetSource={(h) => updateEdgeRoute(edgeKind, relId, { sourceHandle: h })}
+          onSetTarget={(h) => updateEdgeRoute(edgeKind, relId, { targetHandle: h })}
+        />
       </div>
 
       {/* Delete */}
-      <div className="mt-1 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
-        <button onClick={handleDelete}
-          className="block w-full text-left px-3 py-1.5 text-sm transition-colors"
-          style={{ color: 'var(--danger)' }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--danger-soft)'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-          Delete Relationship
-        </button>
-      </div>
-    </>
+      <button
+        onClick={handleDelete}
+        className="mt-2 w-full px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+        style={{ color: 'var(--danger)' }}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--danger-soft)'}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+      >
+        Delete relationship
+      </button>
+    </div>
   )
 }
 
-const SNAP_HANDLES: Array<{ id: string; label: string }> = [
-  { id: 'top-left', label: 'TL' },
-  { id: 'top-center', label: 'T' },
-  { id: 'top-right', label: 'TR' },
-  { id: 'left-center', label: 'L' },
-  { id: 'right-center', label: 'R' },
-  { id: 'bottom-left', label: 'BL' },
-  { id: 'bottom-center', label: 'B' },
-  { id: 'bottom-right', label: 'BR' },
-]
-
-function SnapPointPicker({ label, relId, relType, endpoint, onClose }: {
-  label: string
-  relId: string
-  relType: 'structural' | 'emotional'
-  endpoint: 'source' | 'target'
-  onClose: () => void
+function SnapDiagram({
+  sourceHandle, targetHandle, lineColor, onSetSource, onSetTarget,
+}: {
+  sourceHandle: string
+  targetHandle: string
+  lineColor: string
+  onSetSource: (id: string) => void
+  onSetTarget: (id: string) => void
 }) {
-  const updateEdgeRoute = useGenogramStore((s) => s.updateEdgeRoute)
+  // Two 56x56 boxes side by side, 70px gap. Snap dots r=4 clickable (hit r=8).
+  const BOX = 56
+  const GAP = 70
+  const PAD = 10
+  const W = PAD * 2 + BOX * 2 + GAP
+  const H = PAD * 2 + BOX
+  const srcX = PAD, tgtX = PAD + BOX + GAP, y0 = PAD
+
+  const srcPos = SNAP_POSITIONS[sourceHandle] || SNAP_POSITIONS['right-center']
+  const tgtPos = SNAP_POSITIONS[targetHandle] || SNAP_POSITIONS['left-center']
 
   return (
-    <div className="px-3 py-1">
-      <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label} point:</div>
-      <div className="flex flex-wrap gap-1">
-        {SNAP_HANDLES.map((h) => (
-          <button
-            key={h.id}
-            onClick={() => {
-              const update = endpoint === 'source'
-                ? { sourceHandle: h.id }
-                : { targetHandle: h.id }
-              updateEdgeRoute(relType, relId, update)
-              onClose()
-            }}
-            className="text-[10px] px-1.5 py-0.5 rounded-md transition-colors"
-            style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--accent-soft)'; e.currentTarget.style.color = 'var(--accent)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-secondary)' }}
-          >
-            {h.label}
-          </button>
-        ))}
-      </div>
-    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block' }}>
+      {/* Connection line preview */}
+      <line
+        x1={srcX + srcPos.x} y1={y0 + srcPos.y}
+        x2={tgtX + tgtPos.x} y2={y0 + tgtPos.y}
+        stroke={lineColor} strokeWidth={1.5}
+        style={{ pointerEvents: 'none' }}
+      />
+
+      {/* Source box */}
+      <rect x={srcX} y={y0} width={BOX} height={BOX} rx={4}
+        fill="none" stroke="var(--border)" strokeWidth={1.5} />
+      <text x={srcX + BOX / 2} y={y0 + BOX / 2 + 3} textAnchor="middle"
+        fontSize={9} fill="var(--text-muted)" style={{ pointerEvents: 'none' }}>
+        From
+      </text>
+
+      {/* Target box */}
+      <rect x={tgtX} y={y0} width={BOX} height={BOX} rx={4}
+        fill="none" stroke="var(--border)" strokeWidth={1.5} />
+      <text x={tgtX + BOX / 2} y={y0 + BOX / 2 + 3} textAnchor="middle"
+        fontSize={9} fill="var(--text-muted)" style={{ pointerEvents: 'none' }}>
+        To
+      </text>
+
+      {/* Snap dots — source */}
+      {SNAP_IDS.map((id) => {
+        const p = SNAP_POSITIONS[id]
+        const cx = srcX + p.x, cy = y0 + p.y
+        const active = id === sourceHandle
+        return (
+          <g key={`s-${id}`} onClick={() => onSetSource(id)} style={{ cursor: 'pointer' }}>
+            <circle cx={cx} cy={cy} r={8} fill="transparent" />
+            <circle cx={cx} cy={cy} r={active ? 4 : 3}
+              fill={active ? 'var(--accent)' : 'var(--bg-card)'}
+              stroke={active ? 'var(--accent)' : 'var(--text-muted)'}
+              strokeWidth={1.5} />
+          </g>
+        )
+      })}
+
+      {/* Snap dots — target */}
+      {SNAP_IDS.map((id) => {
+        const p = SNAP_POSITIONS[id]
+        const cx = tgtX + p.x, cy = y0 + p.y
+        const active = id === targetHandle
+        return (
+          <g key={`t-${id}`} onClick={() => onSetTarget(id)} style={{ cursor: 'pointer' }}>
+            <circle cx={cx} cy={cy} r={8} fill="transparent" />
+            <circle cx={cx} cy={cy} r={active ? 4 : 3}
+              fill={active ? 'var(--accent)' : 'var(--bg-card)'}
+              stroke={active ? 'var(--accent)' : 'var(--text-muted)'}
+              strokeWidth={1.5} />
+          </g>
+        )
+      })}
+    </svg>
   )
 }
