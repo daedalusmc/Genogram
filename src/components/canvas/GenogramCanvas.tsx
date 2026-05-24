@@ -21,7 +21,7 @@ import { useGenogramStore } from '../../store/genogramStore'
 import { PersonNodeMemo } from './PersonNode'
 import { GenogramEdge } from './GenogramEdge'
 import { STRUCTURAL_EDGE_STYLES, EMOTIONAL_EDGE_STYLES } from '../../constants/relationshipStyles'
-import { StructuralRelType } from '../../types/enums'
+import { StructuralRelType, EmotionalRelType, ChildConnectionType } from '../../types/enums'
 import { useAutoLayout } from '../../hooks/useAutoLayout'
 import { computeAllEdgeRoutes } from '../../utils/edgeRouter'
 
@@ -33,7 +33,6 @@ const edgeTypes: EdgeTypes = {
   genogram: GenogramEdge,
 }
 
-const NODE_WIDTH = 120
 const SNAP_GRID: [number, number] = [20, 20]
 
 // Snap point positions relative to node top-left
@@ -47,6 +46,20 @@ const HANDLE_POS: Record<string, { x: number; y: number }> = {
   'bottom-right': { x: 86, y: 56 },
   'left-center': { x: 34, y: 30 },
   'right-center': { x: 86, y: 30 },
+}
+
+// Normalize a handle id to its canonical snap point id. Strips any stale -tgt
+// suffix from legacy data and resolves legacy alias ids to real snap ids.
+const ALIAS_TO_SNAP: Record<string, string> = {
+  'couple-right': 'right-center',
+  'couple-left': 'left-center',
+  'child-top': 'top-center',
+  'emo-top': 'top-center',
+  'emo-bottom': 'bottom-center',
+}
+function toSnapId(id: string): string {
+  const clean = id.endsWith('-tgt') ? id.slice(0, -4) : id
+  return ALIAS_TO_SNAP[clean] || clean
 }
 
 export function GenogramCanvas() {
@@ -133,34 +146,6 @@ export function GenogramCanvas() {
     })
   }, [persons, nodePositions, ui.selectedPersonId])
 
-  // Helper: get absolute position of a handle on a node
-  const getHandlePos = (nodeId: string, handleId: string | null): { x: number; y: number } | null => {
-    const pos = nodePositions[nodeId]
-    if (!pos) return null
-    const hOff = handleId ? HANDLE_POS[handleId] : HANDLE_POS['right-center']
-    if (!hOff) return null
-    return { x: pos.x + hOff.x, y: pos.y + hOff.y }
-  }
-
-  // Resolve a snap point ID to the correct React Flow handle ID
-  // Source handles → snap point ID (type="source")
-  // Target handles → snap point ID + "-tgt" suffix (type="target")
-  // Map legacy alias IDs to snap point IDs
-  const ALIAS_TO_SNAP: Record<string, string> = {
-    'couple-right': 'right-center',
-    'couple-left': 'left-center',
-    'child-top': 'top-center',
-    'emo-top': 'top-center',
-    'emo-bottom': 'bottom-center',
-  }
-  const toSnapId = (id: string): string => {
-    // Strip -tgt suffix first, then resolve aliases
-    const clean = id.endsWith('-tgt') ? id.slice(0, -4) : id
-    return ALIAS_TO_SNAP[clean] || clean
-  }
-  const resolveSourceHandle = (snapId: string): string => toSnapId(snapId)
-  const resolveTargetHandle = (snapId: string): string => `${toSnapId(snapId)}-tgt`
-
   // Build edges using unified GenogramEdge
   const flowEdges = useMemo<Edge[]>(() => {
     const edges: Edge[] = []
@@ -175,8 +160,8 @@ export function GenogramCanvas() {
         id: `emo-${rel.id}`,
         source: rel.person1Id,
         target: rel.person2Id,
-        sourceHandle: resolveSourceHandle(srcSnap),
-        targetHandle: resolveTargetHandle(tgtSnap),
+        sourceHandle: toSnapId(srcSnap),
+        targetHandle: toSnapId(tgtSnap),
         type: 'genogram',
         zIndex: 1,
         data: {
@@ -210,8 +195,8 @@ export function GenogramCanvas() {
         id: `struct-${rel.id}`,
         source: rel.person1Id,
         target: rel.person2Id,
-        sourceHandle: resolveSourceHandle(srcSnap),
-        targetHandle: resolveTargetHandle(tgtSnap),
+        sourceHandle: toSnapId(srcSnap),
+        targetHandle: toSnapId(tgtSnap),
         type: 'genogram',
         zIndex: 2,
         data: {
@@ -261,8 +246,8 @@ export function GenogramCanvas() {
             id: `child-${rel.id}-${child.childId}`,
             source: rel.person1Id,
             target: child.childId,
-            sourceHandle: resolveSourceHandle(srcSnap),
-            targetHandle: resolveTargetHandle('top-center'),
+            sourceHandle: toSnapId(srcSnap),
+            targetHandle: toSnapId('top-center'),
             type: 'genogram',
             zIndex: 3,
             data: {
@@ -309,19 +294,23 @@ export function GenogramCanvas() {
       const sourceId = ui.relationshipSourceId
       if (targetId !== sourceId) {
         if (ui.addRelationshipType === 'structural') {
-          addStructuralRelationship(sourceId, targetId, 'marriage' as never)
+          addStructuralRelationship(sourceId, targetId, StructuralRelType.Marriage)
         } else if (ui.addRelationshipType === 'emotional') {
-          addEmotionalRelationship(sourceId, targetId, 'normal' as never)
+          addEmotionalRelationship(sourceId, targetId, EmotionalRelType.Normal)
         } else if (ui.addRelationshipType === 'child') {
-          // Find a structural relationship involving the source person
-          const allRels = Object.values(structuralRels).filter(
-            (r) => r.person1Id === sourceId || r.person2Id === sourceId
-          )
-          let rel = allRels[0] // use first if multiple
+          // If the form specified which family unit (parent has multiple
+          // marriages), honor it. Otherwise fall back: use the only
+          // existing rel involving the source, or auto-create one.
+          let rel = ui.addChildToRelId ? structuralRels[ui.addChildToRelId] : undefined
           if (!rel) {
-            // No structural relationship exists — create one
-            // Find any other person who could be the other parent
-            // (prefer someone already connected emotionally, or on same generation)
+            const sourceRels = Object.values(structuralRels).filter(
+              (r) => r.person1Id === sourceId || r.person2Id === sourceId
+            )
+            rel = sourceRels[0]
+          }
+          if (!rel) {
+            // No structural relationship exists — auto-create one.
+            // Prefer an existing emotional partner; otherwise a same-generation person.
             const sourcePerson = persons[sourceId]
             const emoPartner = Object.values(emotionalRels).find(
               (r) => r.person1Id === sourceId || r.person2Id === sourceId
@@ -336,7 +325,7 @@ export function GenogramCanvas() {
               rel = useGenogramStore.getState().structuralRelationships[relId]
             }
           }
-          if (rel) addChildToRelationship(rel.id, targetId, 'biological' as never)
+          if (rel) addChildToRelationship(rel.id, targetId, ChildConnectionType.Biological)
         }
       }
       cancelAddingRelationship()
@@ -354,29 +343,29 @@ export function GenogramCanvas() {
     else selectPerson(null)
   }, [ui.isAddingRelationship, cancelAddingRelationship, selectPerson])
 
-  // Drag from snap point to snap point creates a relationship
-  // Drag from snap point to snap point creates a relationship
-  // Stores the exact snap points the user chose
+  // Drag from snap point to snap point creates a structural relationship by
+  // default. Users switch type via the edge menu. Skips if a structural rel
+  // already exists between the same pair.
   const onConnect: OnConnect = useCallback((connection) => {
     const { source, target, sourceHandle, targetHandle } = connection
     if (!source || !target || source === target) return
 
-    // Strip -tgt suffix from both handles (ConnectionMode.Loose allows dragging from any handle type)
-    const stripTgt = (h: string | null | undefined, fallback: string): string => {
-      if (!h) return fallback
-      return h.endsWith('-tgt') ? h.slice(0, -4) : h
-    }
-    const srcSnap = stripTgt(sourceHandle, 'right-center')
-    const tgtSnap = stripTgt(targetHandle, 'left-center')
+    // Dedupe: don't create a second structural rel between the same pair
+    const existing = Object.values(structuralRels).find(
+      (r) => (r.person1Id === source && r.person2Id === target) ||
+             (r.person1Id === target && r.person2Id === source)
+    )
+    if (existing) return
 
-    // Always create as structural (Marriage) by default
-    // User can switch to Emotional via the line's context menu
-    const relId = addStructuralRelationship(source, target, 'marriage' as never)
+    const srcSnap = sourceHandle ? toSnapId(sourceHandle) : 'right-center'
+    const tgtSnap = targetHandle ? toSnapId(targetHandle) : 'left-center'
+
+    const relId = addStructuralRelationship(source, target, StructuralRelType.Marriage)
     useGenogramStore.getState().updateEdgeRoute('structural', relId, {
       sourceHandle: srcSnap,
       targetHandle: tgtSnap,
     })
-  }, [addStructuralRelationship, addEmotionalRelationship])
+  }, [addStructuralRelationship, structuralRels])
 
   const isDark = useGenogramStore((s) => s.ui.isDarkMode)
 

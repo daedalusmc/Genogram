@@ -134,10 +134,12 @@ function PersonNodeComponent({ data, selected }: NodeProps<PersonNodeType>) {
   return (
     <div className="flex flex-col items-center cursor-pointer group/node" style={{ width: 120, position: 'relative' }}>
 
-      {/* Snap point handles - source type (drag FROM these to create connections) */}
+      {/* Snap point handles. ConnectionMode.Loose lets source handles act as
+          both ends of a connection, so we only render source-type handles —
+          edges store the snap ID directly with no -tgt suffix. */}
       {snapPoints.map((sp) => (
         <Handle
-          key={`src-${sp.id}`}
+          key={sp.id}
           type="source"
           position={sp.pos}
           id={sp.id}
@@ -146,20 +148,6 @@ function PersonNodeComponent({ data, selected }: NodeProps<PersonNodeType>) {
           isConnectable={true}
         />
       ))}
-      {/* Snap point handles - target type (drag TO these) */}
-      {snapPoints.map((sp) => (
-        <Handle
-          key={`tgt-${sp.id}`}
-          type="target"
-          position={sp.pos}
-          id={`${sp.id}-tgt`}
-          className="nodrag nopan !w-3 !h-3 !border-none !rounded-full transition-all duration-150 snap-handle"
-          style={{ left: sp.left, top: sp.top, transform: 'translate(-50%, -50%)', backgroundColor: 'var(--accent)', zIndex: 10 }}
-          isConnectable={true}
-        />
-      ))}
-
-      {/* No alias handles - edges use snap point IDs directly */}
 
       {/* Symbol + name: this is the drag handle area */}
       <div className="drag-handle" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))', cursor: 'grab' }}>

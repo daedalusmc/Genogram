@@ -12,6 +12,9 @@ interface UIState {
   isAddingRelationship: boolean
   relationshipSourceId: string | null
   addRelationshipType: 'structural' | 'emotional' | 'child' | null
+  // When adding a child, the specific structural rel the child should join.
+  // null means "no preference" (fallback to first rel involving the source).
+  addChildToRelId: string | null
   isPresentationMode: boolean
   presentationIndex: number
   showLegend: boolean
@@ -62,7 +65,7 @@ interface GenogramStore {
   openStructuralPanel: (id: string) => void
   openEmotionalPanel: (id: string) => void
   closePanel: () => void
-  startAddingRelationship: (sourceId: string, type: 'structural' | 'emotional' | 'child') => void
+  startAddingRelationship: (sourceId: string, type: 'structural' | 'emotional' | 'child', toRelId?: string) => void
   cancelAddingRelationship: () => void
   togglePresentationMode: () => void
   setPresentationIndex: (index: number) => void
@@ -103,6 +106,7 @@ const DEFAULT_UI: UIState = {
   isAddingRelationship: false,
   relationshipSourceId: null,
   addRelationshipType: null,
+  addChildToRelId: null,
   isPresentationMode: false,
   presentationIndex: 0,
   showLegend: false,
@@ -307,6 +311,24 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
   },
 
   addStructuralRelationship: (person1Id, person2Id, type) => {
+    // Dedupe: only one structural rel per pair (order-insensitive).
+    // If one exists, update its type instead of creating a duplicate.
+    const existing = Object.values(get().structuralRelationships).find(
+      (r) => (r.person1Id === person1Id && r.person2Id === person2Id) ||
+             (r.person1Id === person2Id && r.person2Id === person1Id)
+    )
+    if (existing) {
+      if (existing.type !== type) {
+        set((state) => ({
+          structuralRelationships: {
+            ...state.structuralRelationships,
+            [existing.id]: { ...existing, type },
+          },
+        }))
+      }
+      return existing.id
+    }
+
     const id = uuidv4()
     const rel: StructuralRelationship = {
       id,
@@ -381,6 +403,16 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
   },
 
   addEmotionalRelationship: (person1Id, person2Id, type) => {
+    // Dedupe: same (pair, type) → return existing. Different types between the
+    // same pair are allowed (e.g. Close + Conflict).
+    const existing = Object.values(get().emotionalRelationships).find(
+      (r) => r.type === type && (
+        (r.person1Id === person1Id && r.person2Id === person2Id) ||
+        (r.person1Id === person2Id && r.person2Id === person1Id)
+      )
+    )
+    if (existing) return existing.id
+
     const id = uuidv4()
     const isDirected = [
       EmotionalRelType.Violence, EmotionalRelType.PhysicalAbuse,
@@ -448,15 +480,27 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
     }))
   },
 
-  startAddingRelationship: (sourceId, type) => {
+  startAddingRelationship: (sourceId, type, toRelId) => {
     set((state) => ({
-      ui: { ...state.ui, isAddingRelationship: true, relationshipSourceId: sourceId, addRelationshipType: type },
+      ui: {
+        ...state.ui,
+        isAddingRelationship: true,
+        relationshipSourceId: sourceId,
+        addRelationshipType: type,
+        addChildToRelId: toRelId ?? null,
+      },
     }))
   },
 
   cancelAddingRelationship: () => {
     set((state) => ({
-      ui: { ...state.ui, isAddingRelationship: false, relationshipSourceId: null, addRelationshipType: null },
+      ui: {
+        ...state.ui,
+        isAddingRelationship: false,
+        relationshipSourceId: null,
+        addRelationshipType: null,
+        addChildToRelId: null,
+      },
     }))
   },
 

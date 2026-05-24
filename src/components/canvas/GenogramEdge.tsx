@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import type { EdgeProps, Edge } from '@xyflow/react'
 import { useReactFlow } from '@xyflow/react'
-import { EMOTIONAL_EDGE_STYLES, STRUCTURAL_EDGE_STYLES } from '../../constants/relationshipStyles'
+import { EMOTIONAL_EDGE_STYLES } from '../../constants/relationshipStyles'
 import {
   StructuralRelType, STRUCTURAL_REL_LABELS,
   EmotionalRelType, EMOTIONAL_REL_LABELS,
@@ -48,10 +48,6 @@ export function GenogramEdge({
   const [showMenu, setShowMenu] = useState(false)
   const { getViewport } = useReactFlow()
   const updateEdgeRoute = useGenogramStore((s) => s.updateEdgeRoute)
-  const updateStructuralRelationship = useGenogramStore((s) => s.updateStructuralRelationship)
-  const removeStructuralRelationship = useGenogramStore((s) => s.removeStructuralRelationship)
-  const updateEmotionalRelationship = useGenogramStore((s) => s.updateEmotionalRelationship)
-  const removeEmotionalRelationship = useGenogramStore((s) => s.removeEmotionalRelationship)
 
   if (!data) return null
 
@@ -453,19 +449,6 @@ export function GenogramEdge({
   )
 }
 
-const SNAP_POINT_OPTIONS = [
-  { id: 'couple-right', label: 'Right' },
-  { id: 'couple-left', label: 'Left' },
-  { id: 'child-top', label: 'Top Center' },
-  { id: 'emo-top', label: 'Top Center' },
-  { id: 'emo-bottom', label: 'Bottom Center' },
-  { id: 'top-left', label: 'Top Left' },
-  { id: 'top-right', label: 'Top Right' },
-  { id: 'bottom-left', label: 'Bottom Left' },
-  { id: 'bottom-right', label: 'Bottom Right' },
-]
-
-// Source handles must be type="source", target handles must be type="target"
 function UnifiedRelMenu({ edgeKind, relId, relType, onClose }: {
   edgeKind: 'structural' | 'emotional'
   relId: string
@@ -573,44 +556,31 @@ function UnifiedRelMenu({ edgeKind, relId, relType, onClose }: {
   )
 }
 
+const SNAP_HANDLES: Array<{ id: string; label: string }> = [
+  { id: 'top-left', label: 'TL' },
+  { id: 'top-center', label: 'T' },
+  { id: 'top-right', label: 'TR' },
+  { id: 'left-center', label: 'L' },
+  { id: 'right-center', label: 'R' },
+  { id: 'bottom-left', label: 'BL' },
+  { id: 'bottom-center', label: 'B' },
+  { id: 'bottom-right', label: 'BR' },
+]
+
 function SnapPointPicker({ label, relId, relType, endpoint, onClose }: {
   label: string
-  currentHandle?: string
   relId: string
   relType: 'structural' | 'emotional'
   endpoint: 'source' | 'target'
   onClose: () => void
 }) {
   const updateEdgeRoute = useGenogramStore((s) => s.updateEdgeRoute)
-  const handles = endpoint === 'source'
-    ? [
-        { id: 'couple-right', label: 'Right' },
-        { id: 'emo-top', label: 'Top' },
-        { id: 'top-left', label: 'Top Left' },
-        { id: 'top-right', label: 'Top Right' },
-        { id: 'bottom-center', label: 'Bottom' },
-        { id: 'bottom-left', label: 'Bottom Left' },
-        { id: 'bottom-right', label: 'Bottom Right' },
-        { id: 'left-center', label: 'Left' },
-        { id: 'right-center', label: 'Right' },
-      ]
-    : [
-        { id: 'couple-left', label: 'Left' },
-        { id: 'emo-bottom', label: 'Bottom' },
-        { id: 'child-top', label: 'Top' },
-        { id: 'top-left', label: 'Top Left' },
-        { id: 'top-right', label: 'Top Right' },
-        { id: 'bottom-left', label: 'Bottom Left' },
-        { id: 'bottom-right', label: 'Bottom Right' },
-        { id: 'left-center', label: 'Left' },
-        { id: 'right-center', label: 'Right' },
-      ]
 
   return (
     <div className="px-3 py-1">
       <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label} point:</div>
       <div className="flex flex-wrap gap-1">
-        {handles.map((h) => (
+        {SNAP_HANDLES.map((h) => (
           <button
             key={h.id}
             onClick={() => {

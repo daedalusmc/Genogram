@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { useGenogramStore } from '../../store/genogramStore'
-import { Gender, GENDER_LABELS, ConditionType, CONDITION_COLORS, StructuralRelType, EmotionalRelType, ChildConnectionType } from '../../types/enums'
+import { Gender, GENDER_LABELS, ConditionType, CONDITION_COLORS, STRUCTURAL_REL_LABELS } from '../../types/enums'
 import type { Condition } from '../../types/person'
 
 const inputClass = "w-full rounded-lg px-3 py-2 text-sm theme-input transition-colors"
@@ -9,6 +9,7 @@ const labelClass = "block text-xs font-semibold uppercase tracking-wider mb-1.5"
 export function PersonFormPanel() {
   const ui = useGenogramStore((s) => s.ui)
   const persons = useGenogramStore((s) => s.persons)
+  const structuralRels = useGenogramStore((s) => s.structuralRelationships)
   const updatePerson = useGenogramStore((s) => s.updatePerson)
   const removePerson = useGenogramStore((s) => s.removePerson)
   const closePanel = useGenogramStore((s) => s.closePanel)
@@ -240,23 +241,63 @@ export function PersonFormPanel() {
       <div className="pt-3" style={{ borderTop: '1px solid var(--border)' }}>
         <label className={`${labelClass} mb-2`} style={{ color: 'var(--text-secondary)' }}>Add Relationship</label>
         <div className="space-y-1.5">
-          {[
-            { type: 'structural' as const, label: '+ Partner / Spouse', desc: 'click another person' },
-            { type: 'emotional' as const, label: '+ Emotional Relationship', desc: 'click another person' },
-            { type: 'child' as const, label: '+ Add Child', desc: 'click a child person' },
-          ].map(({ type, label, desc }) => (
-            <button
-              key={type}
-              onClick={() => startAddingRelationship(person.id, type)}
-              className="w-full text-left px-3 py-2 text-sm rounded-lg transition-colors"
-              style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
-              onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
-              onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
-            >
-              <span className="font-medium">{label}</span>
-              <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>({desc})</span>
-            </button>
-          ))}
+          <button
+            onClick={() => startAddingRelationship(person.id, 'structural')}
+            className="w-full text-left px-3 py-2 text-sm rounded-lg transition-colors"
+            style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+          >
+            <span className="font-medium">+ Partner / Spouse</span>
+            <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>(click another person)</span>
+          </button>
+          <button
+            onClick={() => startAddingRelationship(person.id, 'emotional')}
+            className="w-full text-left px-3 py-2 text-sm rounded-lg transition-colors"
+            style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+          >
+            <span className="font-medium">+ Emotional Relationship</span>
+            <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>(click another person)</span>
+          </button>
+
+          {/* Add child: scope to a specific family unit so half-siblings land
+              on the right T-junction. One button per structural rel the
+              person is part of. */}
+          {(() => {
+            const myRels = Object.values(structuralRels).filter(
+              (r) => r.person1Id === person.id || r.person2Id === person.id
+            )
+            if (myRels.length === 0) {
+              return (
+                <div className="px-3 py-2 text-xs rounded-lg" style={{
+                  backgroundColor: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px dashed var(--border)',
+                }}>
+                  Add a partner first to add children.
+                </div>
+              )
+            }
+            return myRels.map((rel) => {
+              const partnerId = rel.person1Id === person.id ? rel.person2Id : rel.person1Id
+              const partner = persons[partnerId]
+              const partnerName = partner?.name || 'Unknown'
+              const relLabel = STRUCTURAL_REL_LABELS[rel.type] || rel.type
+              return (
+                <button
+                  key={rel.id}
+                  onClick={() => startAddingRelationship(person.id, 'child', rel.id)}
+                  className="w-full text-left px-3 py-2 text-sm rounded-lg transition-colors"
+                  style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+                >
+                  <span className="font-medium">+ Add Child with {partnerName}</span>
+                  <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>({relLabel.toLowerCase()})</span>
+                </button>
+              )
+            })
+          })()}
         </div>
       </div>
 
