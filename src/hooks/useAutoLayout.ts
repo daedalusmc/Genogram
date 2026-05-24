@@ -62,14 +62,28 @@ export function useAutoLayout() {
 
     const MALE_TYPES = new Set(['male', 'gay-male', 'trans-ftm'])
 
+    // Pick which partner goes on the left for visual layout. Mixed-gender
+    // couples use the male-on-left convention. Same-gender couples fall back
+    // to (older DOB, then lower id) so the layout doesn't reshuffle when the
+    // user adds new relationships in a different order.
     function determineLR(rel: StructuralRelationship): [string, string] {
       const p1 = persons[rel.person1Id]
       const p2 = persons[rel.person2Id]
       if (!p1 || !p2) return [rel.person1Id, rel.person2Id]
-      if (!MALE_TYPES.has(p1.gender) && MALE_TYPES.has(p2.gender)) {
-        return [rel.person2Id, rel.person1Id]
+
+      const p1Male = MALE_TYPES.has(p1.gender)
+      const p2Male = MALE_TYPES.has(p2.gender)
+      if (p1Male && !p2Male) return [rel.person1Id, rel.person2Id]
+      if (!p1Male && p2Male) return [rel.person2Id, rel.person1Id]
+
+      if (p1.dateOfBirth && p2.dateOfBirth && p1.dateOfBirth !== p2.dateOfBirth) {
+        return p1.dateOfBirth < p2.dateOfBirth
+          ? [rel.person1Id, rel.person2Id]
+          : [rel.person2Id, rel.person1Id]
       }
-      return [rel.person1Id, rel.person2Id]
+      return rel.person1Id < rel.person2Id
+        ? [rel.person1Id, rel.person2Id]
+        : [rel.person2Id, rel.person1Id]
     }
 
     // --- Build family unit trees ---
@@ -91,21 +105,35 @@ export function useAutoLayout() {
       const childUnits: FamilyUnit[] = []
       const leafChildren: string[] = []
 
-      // Sort children by birth date or creation order for consistent layout
+      // Sort children: DOB primary, child id as deterministic tiebreaker.
       const sortedChildren = [...rel.children].sort((a, b) => {
         const pa = persons[a.childId]
         const pb = persons[b.childId]
-        if (!pa || !pb) return 0
-        if (pa.dateOfBirth && pb.dateOfBirth) return pa.dateOfBirth.localeCompare(pb.dateOfBirth)
-        return 0
+        if (!pa || !pb) return a.childId.localeCompare(b.childId)
+        if (pa.dateOfBirth && pb.dateOfBirth && pa.dateOfBirth !== pb.dateOfBirth) {
+          return pa.dateOfBirth.localeCompare(pb.dateOfBirth)
+        }
+        return a.childId.localeCompare(b.childId)
       })
 
       for (const child of sortedChildren) {
         const cid = child.childId
         if (!persons[cid]) continue
 
-        // Does this child have their own couple?
-        const childRels = partnerInRel.get(cid) || []
+        // Sort this child's marriages deterministically so the order they're
+        // processed doesn't depend on the order rels were inserted.
+        const childRels = [...(partnerInRel.get(cid) || [])].sort((a, b) => {
+          const ra = structuralRels[a]
+          const rb = structuralRels[b]
+          if (!ra || !rb) return a.localeCompare(b)
+          const aDob = earliestDob(ra)
+          const bDob = earliestDob(rb)
+          if (aDob !== bDob) return aDob.localeCompare(bDob)
+          const aStart = ra.startDate || ''
+          const bStart = rb.startDate || ''
+          if (aStart !== bStart) return aStart.localeCompare(bStart)
+          return a.localeCompare(b)
+        })
         let childHasFamily = false
 
         for (const childRelId of childRels) {
@@ -129,28 +157,29 @@ export function useAutoLayout() {
     // OR the oldest generation couples
     const relList = Object.values(structuralRels)
 
-    // Sort: prioritize couples with no parents, then by generation
+    // Sort root rels: roots first, then by generation, with deterministic
+    // tiebreakers so the layout doesn't reshuffle when new rels are added.
+    const earliestDob = (rel: StructuralRelationship): string => {
+      const dobs = [persons[rel.person1Id]?.dateOfBirth, persons[rel.person2Id]?.dateOfBirth]
+        .filter((d): d is string => Boolean(d))
+        .sort()
+      return dobs[0] || ''
+    }
+
     const sortedRels = [...relList].sort((a, b) => {
-      const aP1Child = childOfRel.has(a.person1Id)
-      const aP2Child = childOfRel.has(a.person2Id)
-      const bP1Child = childOfRel.has(b.person1Id)
-      const bP2Child = childOfRel.has(b.person2Id)
+      const aIsRoot = !childOfRel.has(a.person1Id) && !childOfRel.has(a.person2Id)
+      const bIsRoot = !childOfRel.has(b.person1Id) && !childOfRel.has(b.person2Id)
+      if (aIsRoot !== bIsRoot) return aIsRoot ? -1 : 1
 
-      const aIsRoot = !aP1Child && !aP2Child
-      const bIsRoot = !bP1Child && !bP2Child
+      const aGen = Math.min(persons[a.person1Id]?.generation ?? 99, persons[a.person2Id]?.generation ?? 99)
+      const bGen = Math.min(persons[b.person1Id]?.generation ?? 99, persons[b.person2Id]?.generation ?? 99)
+      if (aGen !== bGen) return aGen - bGen
 
-      if (aIsRoot && !bIsRoot) return -1
-      if (!aIsRoot && bIsRoot) return 1
+      const aDob = earliestDob(a)
+      const bDob = earliestDob(b)
+      if (aDob !== bDob) return aDob.localeCompare(bDob)
 
-      const aGen = Math.min(
-        persons[a.person1Id]?.generation ?? 99,
-        persons[a.person2Id]?.generation ?? 99
-      )
-      const bGen = Math.min(
-        persons[b.person1Id]?.generation ?? 99,
-        persons[b.person2Id]?.generation ?? 99
-      )
-      return aGen - bGen
+      return a.id.localeCompare(b.id)
     })
 
     const rootUnits: FamilyUnit[] = []
@@ -190,12 +219,18 @@ export function useAutoLayout() {
     // --- Position nodes (top-down) ---
 
     function positionUnit(unit: FamilyUnit, centerX: number, y: number) {
-      // Place the couple centered at centerX
+      // Place the couple centered at centerX. If a partner is already placed
+      // (they're in a previous marriage in this layout), don't move them —
+      // place only the new spouse so multi-marriage layouts stay sane.
       const coupleLeftX = centerX - COUPLE_UNIT_W / 2
-      positions[unit.leftId] = { x: coupleLeftX, y }
-      positions[unit.rightId] = { x: coupleLeftX + NODE_WIDTH + COUPLE_GAP, y }
-      placed.add(unit.leftId)
-      placed.add(unit.rightId)
+      if (!placed.has(unit.leftId)) {
+        positions[unit.leftId] = { x: coupleLeftX, y }
+        placed.add(unit.leftId)
+      }
+      if (!placed.has(unit.rightId)) {
+        positions[unit.rightId] = { x: coupleLeftX + NODE_WIDTH + COUPLE_GAP, y }
+        placed.add(unit.rightId)
+      }
 
       // Gather all children with their widths
       const childEntries: { type: 'unit' | 'leaf'; unit?: FamilyUnit; id?: string; width: number }[] = []
