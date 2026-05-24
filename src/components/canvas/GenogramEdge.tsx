@@ -12,6 +12,79 @@ import { EdgeMenu } from '../ui/EdgeMenu'
 const SNAP = 20
 function snap(v: number): number { return Math.round(v / SNAP) * SNAP }
 
+type Pt = { x: number; y: number }
+
+function polylineLength(points: Pt[]): number {
+  let total = 0
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
+  }
+  return total
+}
+
+// Position and local direction at distance d along the polyline.
+function pointAlongPolyline(points: Pt[], d: number): { x: number; y: number; dx: number; dy: number } {
+  let traveled = 0
+  for (let i = 1; i < points.length; i++) {
+    const ax = points[i - 1].x, ay = points[i - 1].y
+    const bx = points[i].x, by = points[i].y
+    const segLen = Math.hypot(bx - ax, by - ay)
+    if (traveled + segLen >= d) {
+      const t = segLen === 0 ? 0 : (d - traveled) / segLen
+      return { x: ax + (bx - ax) * t, y: ay + (by - ay) * t, dx: bx - ax, dy: by - ay }
+    }
+    traveled += segLen
+  }
+  const last = points[points.length - 1]
+  const prev = points[points.length - 2] || last
+  return { x: last.x, y: last.y, dx: last.x - prev.x, dy: last.y - prev.y }
+}
+
+const straightPath = (points: Pt[]): string =>
+  points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+
+// Triangular zigzag along an arbitrary polyline. Used for conflict/hostile.
+function buildZigzagPath(points: Pt[], amplitude: number, segmentLen: number, baseOffset = 0): string {
+  if (points.length < 2) return ''
+  const total = polylineLength(points)
+  if (total < segmentLen * 2) return straightPath(points)
+  const segments = Math.max(4, Math.round(total / segmentLen))
+  const out: string[] = []
+  for (let i = 0; i <= segments; i++) {
+    const d = (i / segments) * total
+    const { x, y, dx, dy } = pointAlongPolyline(points, d)
+    const len = Math.hypot(dx, dy) || 1
+    const perpX = -dy / len, perpY = dx / len
+    const sign = i % 2 === 0 ? 1 : -1
+    const amp = i === 0 || i === segments ? 0 : amplitude * sign
+    const off = amp + baseOffset
+    out.push(`${i === 0 ? 'M' : 'L'} ${x + perpX * off} ${y + perpY * off}`)
+  }
+  return out.join(' ')
+}
+
+// Smooth sinusoidal wave along an arbitrary polyline. Used for violence/abuse.
+function buildWavyPath(points: Pt[], amplitude: number, wavelength: number, baseOffset = 0): string {
+  if (points.length < 2) return ''
+  const total = polylineLength(points)
+  if (total < wavelength) return straightPath(points)
+  const samples = Math.max(20, Math.round(total / (wavelength / 4)))
+  const out: string[] = []
+  for (let i = 0; i <= samples; i++) {
+    const d = (i / samples) * total
+    const { x, y, dx, dy } = pointAlongPolyline(points, d)
+    const len = Math.hypot(dx, dy) || 1
+    const perpX = -dy / len, perpY = dx / len
+    // Envelope tapers the wave to zero at the endpoints.
+    const t = i / samples
+    const envelope = Math.min(1, Math.min(t, 1 - t) * 8)
+    const wave = Math.sin((d / wavelength) * Math.PI * 2) * amplitude * envelope
+    const off = wave + baseOffset
+    out.push(`${i === 0 ? 'M' : 'L'} ${x + perpX * off} ${y + perpY * off}`)
+  }
+  return out.join(' ')
+}
+
 export type GenogramEdgeData = {
   edgeKind: 'structural' | 'emotional' | 'child'
   relId: string
@@ -63,8 +136,18 @@ export function GenogramEdge({
     ? [...waypoints, { x: targetX, y: targetY }]
     : [{ x: sourceX, y: sourceY }, ...waypoints, { x: targetX, y: targetY }]
 
-  // Build SVG path through all points
-  const pathD = allPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  // Straight polyline through all points (used for hit area and as fallback).
+  const pathD = straightPath(allPoints)
+
+  // Pattern-decorated visible path. For zigzag/wavy/double-wavy we draw the
+  // shaped path instead of a straight line; the hit area stays straight so
+  // clicks land predictably.
+  const pattern = data.pattern
+  const visiblePath =
+    pattern === 'zigzag' ? buildZigzagPath(allPoints, 5, 12) :
+    pattern === 'wavy' ? buildWavyPath(allPoints, 4, 14) :
+    pattern === 'double-wavy' ? buildWavyPath(allPoints, 4, 14) :
+    pathD
 
   // Compute segment midpoints for inserting new waypoints
   const segmentMids = allPoints.slice(0, -1).map((p, i) => ({
@@ -329,23 +412,33 @@ export function GenogramEdge({
     )
   }
 
-  // Render multi-line for emotional edges
+  // Render extra parallel lines for multi-line emotional edges (close, fused, etc.)
+  // The main visible path is at offset 0; extras are placed symmetrically around it.
+  // Pattern (zigzag/wavy) propagates so close-hostile renders parallel zigzags.
   const renderMultiLine = () => {
     const count = data.lineCount || 1
     if (count <= 1) return null
-    const spacing = 3
-    return Array.from({ length: count - 1 }).map((_, i) => {
-      const offset = (i + 1 - (count - 1) / 2) * spacing
-      if (Math.abs(offset) < 0.5) return null
-      // Simple parallel offset (approximate)
-      const dx = targetX - sourceX
-      const dy = targetY - sourceY
-      const len = Math.sqrt(dx * dx + dy * dy) || 1
-      const nx = -dy / len * offset
-      const ny = dx / len * offset
-      const offsetPath = allPoints.map((p, j) =>
-        `${j === 0 ? 'M' : 'L'} ${p.x + nx} ${p.y + ny}`
-      ).join(' ')
+    // Wider spacing for patterned lines so adjacent zigzags don't overlap.
+    const spacing = pattern ? 6 : 3
+    const offsets: number[] =
+      count === 2 ? [spacing] :
+      count === 3 ? [-spacing, spacing] :
+      []
+    return offsets.map((offset, i) => {
+      const offsetPath =
+        pattern === 'zigzag' ? buildZigzagPath(allPoints, 5, 12, offset) :
+        pattern === 'wavy' || pattern === 'double-wavy' ? buildWavyPath(allPoints, 4, 14, offset) :
+        // Plain parallel polyline: shift each point along the average perpendicular.
+        (() => {
+          const dx = targetX - sourceX
+          const dy = targetY - sourceY
+          const len = Math.sqrt(dx * dx + dy * dy) || 1
+          const nx = -dy / len * offset
+          const ny = dx / len * offset
+          return allPoints.map((p, j) =>
+            `${j === 0 ? 'M' : 'L'} ${p.x + nx} ${p.y + ny}`
+          ).join(' ')
+        })()
       return (
         <path key={`multi-${i}`} d={offsetPath} fill="none"
           stroke={strokeColor} strokeWidth={lineWidth}
@@ -370,11 +463,19 @@ export function GenogramEdge({
         style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
         onPointerDown={onLinePointerDown} />
 
-      {/* Main visible path */}
-      <path d={pathD} fill="none" stroke={strokeColor} strokeWidth={lineWidth}
+      {/* Main visible path — straight, zigzag, or wavy depending on data.pattern */}
+      <path d={visiblePath} fill="none" stroke={strokeColor} strokeWidth={lineWidth}
         strokeDasharray={dashArray}
         markerEnd={markerId ? `url(#${markerId})` : undefined}
         style={{ pointerEvents: 'none' }} />
+
+      {/* Second wave for double-wavy (sexual abuse) — offset perpendicular */}
+      {pattern === 'double-wavy' && (
+        <path d={buildWavyPath(allPoints, 4, 14, 4)} fill="none"
+          stroke={strokeColor} strokeWidth={lineWidth}
+          markerEnd={markerId ? `url(#${markerId})` : undefined}
+          style={{ pointerEvents: 'none' }} />
+      )}
 
       {/* Extra parallel lines for multi-line emotional edges */}
       {renderMultiLine()}
