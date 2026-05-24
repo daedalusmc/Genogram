@@ -24,6 +24,7 @@ import { STRUCTURAL_EDGE_STYLES, EMOTIONAL_EDGE_STYLES } from '../../constants/r
 import { StructuralRelType, EmotionalRelType, ChildConnectionType } from '../../types/enums'
 import { useAutoLayout } from '../../hooks/useAutoLayout'
 import { computeAllEdgeRoutes } from '../../utils/edgeRouter'
+import { computeGenerations } from '../../utils/generations'
 
 const nodeTypes: NodeTypes = {
   person: PersonNodeMemo,
@@ -134,7 +135,10 @@ export function GenogramCanvas() {
   // Build nodes
   const flowNodes = useMemo<Node[]>(() => {
     return Object.values(persons).map((person, index) => {
-      const pos = nodePositions[person.id] || { x: index * 180, y: person.generation * 220 }
+      // Fallback position for a person without a stored position. The real
+      // layout is computed in useAutoLayout — this is just a "somewhere
+      // visible" default until that runs.
+      const pos = nodePositions[person.id] || { x: index * 180, y: 0 }
       return {
         id: person.id,
         type: 'person',
@@ -311,14 +315,15 @@ export function GenogramCanvas() {
           if (!rel) {
             // No structural relationship exists — auto-create one.
             // Prefer an existing emotional partner; otherwise a same-generation person.
-            const sourcePerson = persons[sourceId]
             const emoPartner = Object.values(emotionalRels).find(
               (r) => r.person1Id === sourceId || r.person2Id === sourceId
             )
+            const gens = emoPartner ? null : computeGenerations(persons, structuralRels)
+            const sourceGen = gens ? gens[sourceId] : 0
             const partnerId = emoPartner
               ? (emoPartner.person1Id === sourceId ? emoPartner.person2Id : emoPartner.person1Id)
               : Object.values(persons).find(
-                  (p) => p.id !== sourceId && p.id !== targetId && p.generation === sourcePerson?.generation
+                  (p) => p.id !== sourceId && p.id !== targetId && gens && gens[p.id] === sourceGen
                 )?.id
             if (partnerId) {
               const relId = addStructuralRelationship(sourceId, partnerId, StructuralRelType.Cohabitation)

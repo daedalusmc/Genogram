@@ -12,7 +12,7 @@ export function EmptyState() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleAdd = useCallback((gender: Gender) => {
-    const id = addPerson(gender, 0)
+    const id = addPerson(gender)
     setShowGenderPicker(false)
     // Open the edit panel so the user can fill in name and details right away.
     setTimeout(() => openPersonPanel(id), 50)

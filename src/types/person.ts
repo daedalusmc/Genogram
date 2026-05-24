@@ -18,7 +18,8 @@ export interface Person {
   notes: string
   isDeceased: boolean
   pregnancyType: PregnancyType | null
-  generation: number
+  // generation is derived from the structural relationship graph and computed
+  // on-demand by utils/generations.ts — it's not stored on Person.
   parentRelationshipId: string | null  // structural relationship this person is a child of
   parentIds: string[] | null           // [person1Id, person2Id] from parent relationship
 }

@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { Person } from '../types/person'
 import type { StructuralRelationship } from '../types/relationship'
+import { computeGenerations } from '../utils/generations'
 
 const NODE_WIDTH = 120
 const GENERATION_GAP = 240
@@ -35,6 +36,10 @@ export function useAutoLayout() {
   ): Record<string, { x: number; y: number }> => {
     const personList = Object.values(persons)
     if (personList.length === 0) return {}
+
+    // Derive generation levels once at the top — used for root rel sorting,
+    // root Y placement, and grouping unplaced people in the fallback.
+    const gens = computeGenerations(persons, structuralRels)
 
     const positions: Record<string, { x: number; y: number }> = {}
     const placed = new Set<string>()
@@ -171,8 +176,8 @@ export function useAutoLayout() {
       const bIsRoot = !childOfRel.has(b.person1Id) && !childOfRel.has(b.person2Id)
       if (aIsRoot !== bIsRoot) return aIsRoot ? -1 : 1
 
-      const aGen = Math.min(persons[a.person1Id]?.generation ?? 99, persons[a.person2Id]?.generation ?? 99)
-      const bGen = Math.min(persons[b.person1Id]?.generation ?? 99, persons[b.person2Id]?.generation ?? 99)
+      const aGen = Math.min(gens[a.person1Id] ?? 99, gens[a.person2Id] ?? 99)
+      const bGen = Math.min(gens[b.person1Id] ?? 99, gens[b.person2Id] ?? 99)
       if (aGen !== bGen) return aGen - bGen
 
       const aDob = earliestDob(a)
@@ -276,8 +281,8 @@ export function useAutoLayout() {
       const w = unitWidths.get(root.relId) || COUPLE_UNIT_W
       const centerX = rootX + w / 2
 
-      const p1Gen = persons[root.leftId]?.generation ?? 0
-      const p2Gen = persons[root.rightId]?.generation ?? 0
+      const p1Gen = gens[root.leftId] ?? 0
+      const p2Gen = gens[root.rightId] ?? 0
       const rootY = Math.min(p1Gen, p2Gen) * GENERATION_GAP
 
       positionUnit(root, centerX, rootY)
@@ -290,8 +295,9 @@ export function useAutoLayout() {
     if (unplaced.length > 0) {
       const genGroups: Record<number, Person[]> = {}
       for (const p of unplaced) {
-        if (!genGroups[p.generation]) genGroups[p.generation] = []
-        genGroups[p.generation].push(p)
+        const g = gens[p.id] ?? 0
+        if (!genGroups[g]) genGroups[g] = []
+        genGroups[g].push(p)
       }
 
       let fallbackX = rootX + FAMILY_GAP

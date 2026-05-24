@@ -134,12 +134,6 @@ export function PersonFormPanel() {
         </select>
       </div>
 
-      {/* Generation (auto-computed) */}
-      <div>
-        <label className={labelClass} style={{ color: 'var(--text-secondary)' }}>Generation</label>
-        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{person.generation} (auto)</span>
-      </div>
-
       {/* Date of Birth */}
       <div>
         <label className={labelClass} style={{ color: 'var(--text-secondary)' }}>Date of Birth</label>

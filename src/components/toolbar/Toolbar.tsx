@@ -84,7 +84,7 @@ function PillBtn({ children, onClick, active, style: extraStyle, ...rest }: {
   )
 }
 
-function AddPersonDropdown({ onAdd }: { onAdd: (g: Gender, gen: number) => void }) {
+function AddPersonDropdown({ onAdd }: { onAdd: (g: Gender) => void }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -104,7 +104,7 @@ function AddPersonDropdown({ onAdd }: { onAdd: (g: Gender, gen: number) => void 
             {GENDER_OPTIONS.map(({ gender, label }) => (
               <button
                 key={gender}
-                onClick={() => { onAdd(gender, 0); setOpen(false) }}
+                onClick={() => { onAdd(gender); setOpen(false) }}
                 className="block w-full text-left px-4 py-2 text-sm font-medium transition-colors"
                 style={{ color: 'var(--text-primary)' }}
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
@@ -165,8 +165,8 @@ export function Toolbar() {
   const { fitView } = useReactFlow()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleAddPerson = useCallback((gender: Gender, generation: number) => {
-    addPerson(gender, generation)
+  const handleAddPerson = useCallback((gender: Gender) => {
+    addPerson(gender)
     setTimeout(() => fitView({ padding: 0.3, duration: 300 }), 50)
   }, [addPerson, fitView])
 

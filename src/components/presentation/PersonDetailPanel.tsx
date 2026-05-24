@@ -90,7 +90,6 @@ export function PersonDetailPanel({ person, onClose }: PersonDetailPanelProps) {
 
         <div className="text-xs mt-1 font-medium" style={{ color: 'var(--text-muted)' }}>
           {GENDER_LABELS[person.gender] || person.gender}
-          {person.generation > 0 && ` · Gen ${person.generation}`}
         </div>
 
         {/* Dates */}

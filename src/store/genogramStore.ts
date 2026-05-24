@@ -39,7 +39,7 @@ interface GenogramStore {
   ui: UIState
 
   // Actions - Persons
-  addPerson: (gender: Gender, generation?: number) => string
+  addPerson: (gender: Gender) => string
   updatePerson: (id: string, updates: Partial<Person>) => void
   removePerson: (id: string) => void
 
@@ -109,7 +109,7 @@ const DEFAULT_UI: UIState = {
   isDarkMode: typeof window !== 'undefined' && window.localStorage?.getItem('genogram-theme') === 'dark',
 }
 
-function createDefaultPerson(gender: Gender, generation: number): Person {
+function createDefaultPerson(gender: Gender): Person {
   return {
     id: uuidv4(),
     name: '',
@@ -122,82 +122,23 @@ function createDefaultPerson(gender: Gender, generation: number): Person {
     notes: '',
     isDeceased: false,
     pregnancyType: null,
-    generation,
     parentRelationshipId: null,
     parentIds: null,
   }
 }
 
-// Compute generation levels from the parent-child tree via BFS
-function computeGenerations(
-  persons: Record<string, Person>,
-  structuralRels: Record<string, StructuralRelationship>,
-): Record<string, number> {
-  // Build child→parentRelId map
-  const childToRel: Record<string, string> = {}
-  for (const rel of Object.values(structuralRels)) {
-    for (const child of rel.children) {
-      childToRel[child.childId] = rel.id
-    }
-  }
-
-  // Find roots: persons who are not children of any relationship
-  const allIds = Object.keys(persons)
-  const childIds = new Set(Object.keys(childToRel))
-  const roots = allIds.filter((id) => !childIds.has(id))
-
-  const generations: Record<string, number> = {}
-
-  // BFS from roots
-  const queue: Array<{ id: string; gen: number }> = roots.map((id) => ({ id, gen: 0 }))
-  const visited = new Set<string>()
-
-  while (queue.length > 0) {
-    const { id, gen } = queue.shift()!
-    if (visited.has(id)) continue
-    visited.add(id)
-    generations[id] = gen
-
-    // If this person is a partner in any structural relationship, ensure partner has same generation
-    for (const rel of Object.values(structuralRels)) {
-      if (rel.person1Id === id && !visited.has(rel.person2Id)) {
-        queue.push({ id: rel.person2Id, gen })
-      } else if (rel.person2Id === id && !visited.has(rel.person1Id)) {
-        queue.push({ id: rel.person1Id, gen })
-      }
-
-      // Process children of relationships this person is part of
-      if (rel.person1Id === id || rel.person2Id === id) {
-        for (const child of rel.children) {
-          if (!visited.has(child.childId)) {
-            queue.push({ id: child.childId, gen: gen + 1 })
-          }
-        }
-      }
-    }
-  }
-
-  // Any unvisited persons default to generation 0
-  for (const id of allIds) {
-    if (!(id in generations)) generations[id] = 0
-  }
-
-  return generations
-}
-
-// Sync parentRelationshipId, parentIds, and generation on all persons
+// Sync parentRelationshipId and parentIds on every person from the structural
+// relationship graph. Generation is derived elsewhere (utils/generations.ts).
 function syncPersonParentRefs(
   persons: Record<string, Person>,
   structuralRels: Record<string, StructuralRelationship>,
 ): Record<string, Person> {
   const updated = { ...persons }
 
-  // Clear all parent refs
   for (const id of Object.keys(updated)) {
     updated[id] = { ...updated[id], parentRelationshipId: null, parentIds: null }
   }
 
-  // Set parent refs from structural relationship children
   for (const rel of Object.values(structuralRels)) {
     for (const child of rel.children) {
       if (updated[child.childId]) {
@@ -207,14 +148,6 @@ function syncPersonParentRefs(
           parentIds: [rel.person1Id, rel.person2Id],
         }
       }
-    }
-  }
-
-  // Compute generations and apply
-  const generations = computeGenerations(updated, structuralRels)
-  for (const [id, gen] of Object.entries(generations)) {
-    if (updated[id]) {
-      updated[id] = { ...updated[id], generation: gen }
     }
   }
 
@@ -232,8 +165,8 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
   layoutVersion: 0,
   ui: { ...DEFAULT_UI },
 
-  addPerson: (gender, generation = 0) => {
-    const person = createDefaultPerson(gender, generation)
+  addPerson: (gender) => {
+    const person = createDefaultPerson(gender)
     // Place new person near existing nodes or at a default position
     const state = get()
     const existingPositions = Object.values(state.nodePositions)
