@@ -1,8 +1,16 @@
 {
   "name": "genogram-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "description": "Interactive family genogram builder — relationships, conditions, and family-system patterns across generations.",
+  "license": "MIT",
+  "author": "Michael Cousin",
+  "homepage": "https://daedalusmc.github.io/Genogram/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daedalusmc/Genogram.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

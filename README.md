@@ -1,73 +1,71 @@
-# React + TypeScript + Vite
+# Genogram
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+An interactive web app for building and presenting family genograms — the structured family diagrams used in therapy, social work, medicine, and family-systems education to map relationships, health patterns, and emotional dynamics across generations.
 
-Currently, two official plugins are available:
+Built originally to support a Feelings School presentation; now open source.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- **9 gender symbols** with 8 snap points each on the actual shape perimeter
+  (square, circle, diamond, D-shape, inverted triangles, etc.)
+- **12+ structural relationship types** (marriage, divorce, cohabitation,
+  engagement, widowed, casual, love affair, …) with the conventional slash
+  marks and dash patterns
+- **29 emotional relationship types** with the standard genogram visual
+  vocabulary — zigzag for conflict/hostility, wavy for violence/abuse,
+  parallel lines for closeness/fusion, arrows for directed dynamics
+- **Per-marriage child picker** so half-siblings and step-families attach to
+  the right T-junction (no order-dependency)
+- **Health condition color bands** (10+ conditions: depression, alcoholism,
+  cancer, etc.) clipped to the person's shape
+- **Photos**, **labels**, and **notes** on every person
+- **Auto Layout** — tree-based hierarchical placement for family unit trees,
+  with cross-branch marriages handled correctly
+- **Auto edge routing** with obstacle avoidance (direct → L-bend → U-bend →
+  A* pathfinding) so lines don't cross through nodes
+- **Presentation mode** — keyboard-navigable, with a detail panel and smart
+  family-cluster centering
+- **Dark and light themes**
+- **JSON export/import** for sharing genograms
+- **Auto-save** to localStorage
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Quick Start
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Opens at <http://localhost:5173>.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Build
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
+npm run preview
 ```
+
+## Tech Stack
+
+- React 19 + TypeScript
+- [@xyflow/react](https://reactflow.dev/) (React Flow v12) for the canvas
+- [Zustand](https://github.com/pmndrs/zustand) for state
+- Tailwind CSS v4
+- Vite
+
+## How relationships connect
+
+Drag from any snap point on one person to any snap point on another to
+create a relationship. Every new line starts as a Marriage by default —
+click the line and pick a different type (Familial or Emotional) from the
+menu. The snap point picker on the same menu lets you choose exactly which
+side of each shape the line attaches to.
+
+To add a child, open one of the parents' edit panel and click the
+"+ Add Child with [partner]" button for the specific family unit. Then click
+the child on the canvas — it attaches as a T-junction from that couple's
+line.
+
+## License
+
+[MIT](LICENSE) © Michael Cousin
