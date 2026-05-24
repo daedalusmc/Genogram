@@ -408,7 +408,7 @@ export function GenogramCanvas() {
         {!ui.isPresentationMode && (
           <MiniMap
             nodeColor={(node) => {
-              const person = persons[(node as any).id]
+              const person = persons[node.id]
               if (!person) return isDark ? '#475569' : '#94a3b8'
               if (person.isDeceased) return isDark ? '#6b7280' : '#9ca3af'
               if (person.gender === 'male') return isDark ? '#60a5fa' : '#3b82f6'

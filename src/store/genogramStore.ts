@@ -105,7 +105,7 @@ const DEFAULT_UI: UIState = {
   showLegend: false,
   toolMode: 'pointer' as const,
   editingEdgeId: null,
-  isDarkMode: localStorage.getItem('genogram-theme') === 'dark',
+  isDarkMode: typeof window !== 'undefined' && window.localStorage?.getItem('genogram-theme') === 'dark',
 }
 
 function createDefaultPerson(gender: Gender, generation: number): Person {
