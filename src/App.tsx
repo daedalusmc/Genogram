@@ -5,11 +5,14 @@ import { Toolbar } from './components/toolbar/Toolbar'
 import { PersonFormPanel } from './components/panels/PersonFormPanel'
 import { PresentationMode } from './components/presentation/PresentationMode'
 import { Legend } from './components/ui/Legend'
+import { EmptyState } from './components/ui/EmptyState'
 import { useGenogramStore } from './store/genogramStore'
 
 function AppContent() {
   const ui = useGenogramStore((s) => s.ui)
+  const persons = useGenogramStore((s) => s.persons)
   const loadFromLocalStorage = useGenogramStore((s) => s.loadFromLocalStorage)
+  const isEmpty = Object.keys(persons).length === 0
 
   // Load saved data on mount
   useEffect(() => {
@@ -42,6 +45,7 @@ function AppContent() {
           <GenogramCanvas />
           <Legend />
           <PresentationMode />
+          {isEmpty && !ui.isPresentationMode && <EmptyState />}
         </div>
 
         {/* Side panel */}
