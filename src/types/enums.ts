@@ -22,6 +22,7 @@ export enum ConditionType {
   DrugAbuse = 'drug-abuse',
   Alcoholism = 'alcoholism',
   Depression = 'depression',
+  Anxiety = 'anxiety',
   Obesity = 'obesity',
   Cancer = 'cancer',
   HeartDisease = 'heart-disease',
@@ -145,6 +146,7 @@ export const CONDITION_COLORS: Record<ConditionType, string> = {
   [ConditionType.DrugAbuse]: '#f97316',
   [ConditionType.Alcoholism]: '#eab308',
   [ConditionType.Depression]: '#22c55e',
+  [ConditionType.Anxiety]: '#f59e0b',
   [ConditionType.Obesity]: '#14b8a6',
   [ConditionType.Cancer]: '#3b82f6',
   [ConditionType.HeartDisease]: '#ef4444',
@@ -157,20 +159,41 @@ export const CONDITION_COLORS: Record<ConditionType, string> = {
   [ConditionType.MentalIllness]: '#475569',
 }
 
+// Labels are short role / risk markers shown as small colored pills above
+// the person's name on the canvas. We deliberately keep this list short and
+// non-overlapping with Conditions (health) and Emotional Relationships
+// (abuse, conflict) — those have richer first-class representations.
+//
+// Removed in 2026-05: MH, AM, SM, D, A (now Conditions); SA, PA, EA (now
+// Emotional Relationships). loadFromLocalStorage migrates the health ones
+// and drops the abuse ones.
 export const LABEL_COLORS: Record<string, string> = {
-  LD: '#7c3aed',  // Learning Disability - purple
-  PD: '#f97316',  // Physical Disability - orange
-  SD: '#0891b2',  // Sensory Disability - cyan
-  MH: '#3b82f6',  // Mental Health - blue
-  AM: '#eab308',  // Alcohol Misuse - yellow
-  SM: '#ea580c',  // Substance Misuse - dark orange
-  D: '#22c55e',   // Depression - green
-  P: '#6b7280',   // Prison - gray
+  LD:  '#7c3aed', // Learning Disability - purple
+  PD:  '#f97316', // Physical Disability - orange
+  SD:  '#0891b2', // Sensory Disability - cyan
+  P:   '#6b7280', // Prison - gray
   CAR: '#dc2626', // Child At Risk - red
-  SI: '#14b8a6',  // Severe Illness - teal
-  LI: '#0d9488',  // Lifelong Illness - darker teal
-  SA: '#be123c',  // Sexual Abuse - dark red
-  PA: '#b91c1c',  // Physical Abuse - red
-  A: '#f59e0b',   // Anxiety - amber
-  EA: '#ec4899',  // Emotional Abuse - pink
+  SI:  '#14b8a6', // Severe Illness - teal
+  LI:  '#0d9488', // Lifelong Illness - darker teal
+}
+
+export const LABEL_NAMES: Record<string, string> = {
+  LD:  'Learning Disability',
+  PD:  'Physical Disability',
+  SD:  'Sensory Disability',
+  P:   'Prison',
+  CAR: 'Child At Risk',
+  SI:  'Severe Illness',
+  LI:  'Lifelong Illness',
+}
+
+// Maps removed-on-cleanup labels to the condition they should become.
+// Used by store load-migration. Abuse labels (SA, PA, EA) have no clean
+// auto-target — they're emotional relationships, which need two parties.
+export const LEGACY_LABEL_TO_CONDITION: Record<string, ConditionType> = {
+  MH: ConditionType.MentalIllness,
+  AM: ConditionType.Alcoholism,
+  SM: ConditionType.DrugAbuse,
+  D:  ConditionType.Depression,
+  A:  ConditionType.Anxiety,
 }

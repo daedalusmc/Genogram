@@ -1,5 +1,5 @@
 import { useGenogramStore } from '../../store/genogramStore'
-import { CONDITION_COLORS, ConditionType } from '../../types/enums'
+import { CONDITION_COLORS, ConditionType, LABEL_COLORS, LABEL_NAMES } from '../../types/enums'
 import { EMOTIONAL_EDGE_STYLES } from '../../constants/relationshipStyles'
 
 export function Legend() {
@@ -130,28 +130,21 @@ export function Legend() {
 
       {/* Labels */}
       <LegendSection title="Label Codes" last>
-        <div className="grid grid-cols-2 gap-1">
-          {[
-            ['LD', 'Learning Disability'],
-            ['PD', 'Physical Disability'],
-            ['SD', 'Sensory Disability'],
-            ['MH', 'Mental Health'],
-            ['AM', 'Alcohol Misuse'],
-            ['SM', 'Substance Misuse'],
-            ['D', 'Depression'],
-            ['P', 'Prison'],
-            ['CAR', 'Child At Risk'],
-            ['SI', 'Severe Illness'],
-            ['LI', 'Lifelong Illness'],
-            ['SA', 'Sexual Abuse'],
-            ['PA', 'Physical Abuse'],
-            ['EA', 'Emotional Abuse'],
-          ].map(([code, label]) => (
-            <div key={code} className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>{code}</span>
-              {' '}{label}
-            </div>
-          ))}
+        <div className="space-y-1">
+          {Object.keys(LABEL_COLORS).map((code) => {
+            const color = LABEL_COLORS[code]
+            return (
+              <div key={code} className="flex items-center gap-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                <span
+                  className="inline-flex items-center justify-center w-7 px-1 py-0.5 rounded-md text-[10px] font-bold flex-shrink-0"
+                  style={{ backgroundColor: color, color: '#fff' }}
+                >
+                  {code}
+                </span>
+                <span>{LABEL_NAMES[code]}</span>
+              </div>
+            )
+          })}
         </div>
       </LegendSection>
     </div>

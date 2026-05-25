@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
 import type { Person } from '../types/person'
 import type { StructuralRelationship, EmotionalRelationship, ChildConnection } from '../types/relationship'
-import { Gender, StructuralRelType, EmotionalRelType, ChildConnectionType } from '../types/enums'
+import { Gender, StructuralRelType, EmotionalRelType, ChildConnectionType, LABEL_COLORS, LEGACY_LABEL_TO_CONDITION } from '../types/enums'
 
 interface UIState {
   selectedPersonId: string | null
@@ -133,6 +133,43 @@ function createDefaultPerson(gender: Gender): Person {
     parentRelationshipId: null,
     parentIds: null,
   }
+}
+
+// One-time migration on data load. Several labels (MH, AM, SM, D, A, SA,
+// PA, EA) were removed because they duplicated Conditions or Emotional
+// Relationships. Health-related ones get auto-promoted to the equivalent
+// Condition; abuse-related ones are dropped (we can't auto-create an
+// emotional rel without knowing the other party). Anything still in
+// LABEL_COLORS passes through unchanged.
+function migrateLegacyLabels(persons: Record<string, Person>): Record<string, Person> {
+  const updated: Record<string, Person> = {}
+  for (const [id, person] of Object.entries(persons)) {
+    if (!Array.isArray(person.labels) || person.labels.length === 0) {
+      updated[id] = person
+      continue
+    }
+    const keptLabels: string[] = []
+    const conditionsToAdd: typeof person.conditions = []
+    const existingConditionTypes = new Set(person.conditions?.map((c) => c.type) || [])
+    for (const label of person.labels) {
+      if (LABEL_COLORS[label]) {
+        keptLabels.push(label)
+        continue
+      }
+      const promoteTo = LEGACY_LABEL_TO_CONDITION[label]
+      if (promoteTo && !existingConditionTypes.has(promoteTo)) {
+        conditionsToAdd.push({ type: promoteTo, inRecovery: false, suspected: false })
+        existingConditionTypes.add(promoteTo)
+      }
+      // Else: silently drop (abuse labels SA/PA/EA have no clean target).
+    }
+    updated[id] = {
+      ...person,
+      labels: keptLabels,
+      conditions: conditionsToAdd.length > 0 ? [...(person.conditions || []), ...conditionsToAdd] : person.conditions,
+    }
+  }
+  return updated
 }
 
 // Sync parentRelationshipId and parentIds on every person from the structural
@@ -682,7 +719,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
       const raw = localStorage.getItem('genogram-data')
       if (!raw) return false
       const data = JSON.parse(raw)
-      const persons = data.persons || {}
+      const persons = migrateLegacyLabels(data.persons || {})
       const structuralRels = data.structuralRelationships || {}
       set({
         title: data.title || 'My Family Genogram',
@@ -693,7 +730,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
         nodePositions: data.nodePositions || {},
         edgeWaypoints: data.edgeWaypoints || {},
       })
-      // Re-save immediately so migrated parent refs persist
+      // Re-save immediately so migrated parent refs and labels persist
       get().saveToLocalStorage()
       return true
     } catch {

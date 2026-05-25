@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { useGenogramStore } from '../../store/genogramStore'
-import { Gender, GENDER_LABELS, ConditionType, CONDITION_COLORS, STRUCTURAL_REL_LABELS } from '../../types/enums'
+import { Gender, GENDER_LABELS, ConditionType, CONDITION_COLORS, STRUCTURAL_REL_LABELS, LABEL_COLORS, LABEL_NAMES } from '../../types/enums'
 import type { Condition } from '../../types/person'
 
 const inputClass = "w-full rounded-lg px-3 py-2 text-sm theme-input transition-colors"
@@ -195,27 +195,55 @@ export function PersonFormPanel() {
       {/* Labels */}
       <div>
         <label className={labelClass} style={{ color: 'var(--text-secondary)' }}>Labels</label>
-        <div className="flex flex-wrap gap-1 mb-2">
-          {person.labels.map((label) => (
-            <span key={label} className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1 font-medium"
-              style={{ backgroundColor: 'var(--danger-soft)', color: 'var(--danger)' }}>
-              {label}
-              <button onClick={() => removeLabel(label)} className="hover:opacity-70">&times;</button>
-            </span>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {['LD', 'PD', 'SD', 'MH', 'AM', 'SM', 'D', 'P', 'CAR', 'SI', 'LI', 'SA', 'PA', 'A', 'EA'].map((label) => (
-            <button
-              key={label}
-              onClick={() => addLabel(label)}
-              disabled={person.labels.includes(label)}
-              className="text-[10px] px-1.5 py-0.5 rounded-md font-medium transition-colors disabled:opacity-30"
-              style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-            >
-              {label}
-            </button>
-          ))}
+        {person.labels.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {person.labels.map((label) => {
+              const color = LABEL_COLORS[label] || 'var(--text-muted)'
+              const name = LABEL_NAMES[label] || label
+              return (
+                <span
+                  key={label}
+                  className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1.5 font-medium"
+                  style={{ backgroundColor: `${color}1f`, color, border: `1px solid ${color}66` }}
+                  title={name}
+                >
+                  <span className="font-bold">{label}</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{name}</span>
+                  <button onClick={() => removeLabel(label)} className="hover:opacity-70 ml-0.5">&times;</button>
+                </span>
+              )
+            })}
+          </div>
+        )}
+        <div className="space-y-1">
+          {Object.keys(LABEL_COLORS).map((label) => {
+            const color = LABEL_COLORS[label]
+            const name = LABEL_NAMES[label]
+            const active = person.labels.includes(label)
+            return (
+              <button
+                key={label}
+                onClick={() => addLabel(label)}
+                disabled={active}
+                className="w-full text-left px-2 py-1 text-xs rounded-md font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                style={{
+                  backgroundColor: 'var(--bg-hover)',
+                  color: 'var(--text-primary)',
+                  border: `1px solid ${active ? color : 'var(--border)'}`,
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.borderColor = color }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.borderColor = 'var(--border)' }}
+              >
+                <span
+                  className="inline-flex items-center justify-center w-7 px-1 py-0.5 rounded-md text-[10px] font-bold flex-shrink-0"
+                  style={{ backgroundColor: color, color: '#fff' }}
+                >
+                  {label}
+                </span>
+                <span>{name}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
