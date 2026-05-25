@@ -61,9 +61,25 @@ export function EmptyState() {
           </svg>
         </div>
 
+        <div
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-3"
+          style={{
+            backgroundColor: 'rgba(234,179,8,0.12)',
+            color: '#a16207',
+            border: '1px solid rgba(234,179,8,0.3)',
+          }}
+        >
+          <span>⚠</span> Beta · Under active development
+        </div>
+
         <h2 className="text-xl font-bold tracking-tight mb-2">Start your genogram</h2>
-        <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
+        <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
           Add a person, then drag from any snap point to another person to create a relationship.
+        </p>
+        <p className="text-xs mb-6 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+          This is a work in progress — please be gentle and use with caution. Your work
+          auto-saves to this browser, but <strong style={{ color: 'var(--text-secondary)' }}>Export to JSON</strong>{' '}
+          regularly so you can re-import and present later.
         </p>
 
         {!showGenderPicker ? (
