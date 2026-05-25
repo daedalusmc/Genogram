@@ -72,14 +72,33 @@ export function EmptyState() {
           <span>⚠</span> Beta · Under active development
         </div>
 
-        <h2 className="text-xl font-bold tracking-tight mb-2">Start your genogram</h2>
-        <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
-          Add a person, then drag from any snap point to another person to create a relationship.
-        </p>
+        <h2 className="text-xl font-bold tracking-tight mb-3">Start your genogram</h2>
+
+        <ol className="text-sm text-left mb-4 space-y-2" style={{ color: 'var(--text-secondary)' }}>
+          {[
+            { n: '1', t: 'Add people', d: 'Use the buttons below, or the + Add Person button up top.' },
+            { n: '2', t: 'Drag lines to connect them', d: 'Drag from any snap point on one person to another to create a relationship.' },
+            { n: '3', t: 'Add children from a parent’s edit panel', d: 'Click a person, then use Add Child with [partner] to attach a child to that family unit.' },
+          ].map((s) => (
+            <li key={s.n} className="flex gap-2.5">
+              <span
+                className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold"
+                style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+              >
+                {s.n}
+              </span>
+              <span>
+                <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{s.t}.</span>{' '}
+                <span style={{ color: 'var(--text-muted)' }}>{s.d}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+
         <p className="text-xs mb-6 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-          This is a work in progress — please be gentle and use with caution. Your work
-          auto-saves to this browser, but <strong style={{ color: 'var(--text-secondary)' }}>Export to JSON</strong>{' '}
-          regularly so you can re-import and present later.
+          Your work auto-saves to this browser, but{' '}
+          <strong style={{ color: 'var(--text-secondary)' }}>Export to JSON</strong> regularly
+          so you can re-import and present later.
         </p>
 
         {!showGenderPicker ? (

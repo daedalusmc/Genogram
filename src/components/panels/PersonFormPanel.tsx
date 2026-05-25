@@ -192,61 +192,6 @@ export function PersonFormPanel() {
         </div>
       </div>
 
-      {/* Labels */}
-      <div>
-        <label className={labelClass} style={{ color: 'var(--text-secondary)' }}>Labels</label>
-        {person.labels.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
-            {person.labels.map((label) => {
-              const color = LABEL_COLORS[label] || 'var(--text-muted)'
-              const name = LABEL_NAMES[label] || label
-              return (
-                <span
-                  key={label}
-                  className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1.5 font-medium"
-                  style={{ backgroundColor: `${color}1f`, color, border: `1px solid ${color}66` }}
-                  title={name}
-                >
-                  <span className="font-bold">{label}</span>
-                  <span style={{ color: 'var(--text-secondary)' }}>{name}</span>
-                  <button onClick={() => removeLabel(label)} className="hover:opacity-70 ml-0.5">&times;</button>
-                </span>
-              )
-            })}
-          </div>
-        )}
-        <div className="space-y-1">
-          {Object.keys(LABEL_COLORS).map((label) => {
-            const color = LABEL_COLORS[label]
-            const name = LABEL_NAMES[label]
-            const active = person.labels.includes(label)
-            return (
-              <button
-                key={label}
-                onClick={() => addLabel(label)}
-                disabled={active}
-                className="w-full text-left px-2 py-1 text-xs rounded-md font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-                style={{
-                  backgroundColor: 'var(--bg-hover)',
-                  color: 'var(--text-primary)',
-                  border: `1px solid ${active ? color : 'var(--border)'}`,
-                }}
-                onMouseEnter={(e) => { if (!active) e.currentTarget.style.borderColor = color }}
-                onMouseLeave={(e) => { if (!active) e.currentTarget.style.borderColor = 'var(--border)' }}
-              >
-                <span
-                  className="inline-flex items-center justify-center w-7 px-1 py-0.5 rounded-md text-[10px] font-bold flex-shrink-0"
-                  style={{ backgroundColor: color, color: '#fff' }}
-                >
-                  {label}
-                </span>
-                <span>{name}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
       {/* Notes */}
       <div>
         <label className={labelClass} style={{ color: 'var(--text-secondary)' }}>Notes</label>
@@ -320,6 +265,61 @@ export function PersonFormPanel() {
               )
             })
           })()}
+        </div>
+      </div>
+
+      {/* Labels */}
+      <div className="pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+        <label className={`${labelClass} mb-2`} style={{ color: 'var(--text-secondary)' }}>Labels</label>
+        {person.labels.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {person.labels.map((label) => {
+              const color = LABEL_COLORS[label] || 'var(--text-muted)'
+              const name = LABEL_NAMES[label] || label
+              return (
+                <span
+                  key={label}
+                  className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1.5 font-medium"
+                  style={{ backgroundColor: `${color}1f`, color, border: `1px solid ${color}66` }}
+                  title={name}
+                >
+                  <span className="font-bold">{label}</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{name}</span>
+                  <button onClick={() => removeLabel(label)} className="hover:opacity-70 ml-0.5">&times;</button>
+                </span>
+              )
+            })}
+          </div>
+        )}
+        <div className="space-y-1">
+          {Object.keys(LABEL_COLORS).map((label) => {
+            const color = LABEL_COLORS[label]
+            const name = LABEL_NAMES[label]
+            const active = person.labels.includes(label)
+            return (
+              <button
+                key={label}
+                onClick={() => addLabel(label)}
+                disabled={active}
+                className="w-full text-left px-2 py-1 text-xs rounded-md font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                style={{
+                  backgroundColor: 'var(--bg-hover)',
+                  color: 'var(--text-primary)',
+                  border: `1px solid ${active ? color : 'var(--border)'}`,
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.borderColor = color }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.borderColor = 'var(--border)' }}
+              >
+                <span
+                  className="inline-flex items-center justify-center w-7 px-1 py-0.5 rounded-md text-[10px] font-bold flex-shrink-0"
+                  style={{ backgroundColor: color, color: '#fff' }}
+                >
+                  {label}
+                </span>
+                <span>{name}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
