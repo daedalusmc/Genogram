@@ -169,8 +169,11 @@ export function Toolbar() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleAddPerson = useCallback((gender: Gender) => {
-    addPerson(gender)
-    setTimeout(() => fitView({ padding: 0.3, duration: 300 }), 50)
+    const id = addPerson(gender)
+    // Focus the camera on just the new person (with generous padding so a
+    // few neighbors stay visible for context). Without this, large families
+    // make new additions easy to miss.
+    setTimeout(() => fitView({ nodes: [{ id }], padding: 2, duration: 400 }), 50)
   }, [addPerson, fitView])
 
   const handleExport = useCallback(() => {

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
+import { useReactFlow } from '@xyflow/react'
 import { Gender, GENDER_LABELS } from '../../types/enums'
 import { useGenogramStore } from '../../store/genogramStore'
 
@@ -8,15 +9,21 @@ export function EmptyState() {
   const addPerson = useGenogramStore((s) => s.addPerson)
   const openPersonPanel = useGenogramStore((s) => s.openPersonPanel)
   const importJSON = useGenogramStore((s) => s.importJSON)
+  const { fitView } = useReactFlow()
   const [showGenderPicker, setShowGenderPicker] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleAdd = useCallback((gender: Gender) => {
     const id = addPerson(gender)
     setShowGenderPicker(false)
-    // Open the edit panel so the user can fill in name and details right away.
-    setTimeout(() => openPersonPanel(id), 50)
-  }, [addPerson, openPersonPanel])
+    // Center the new person and open the edit panel so the user can fill in
+    // details right away. Without fitView the canvas stays at whatever
+    // viewport it had and the new node is often tiny/off-screen.
+    setTimeout(() => {
+      fitView({ nodes: [{ id }], padding: 2, duration: 400 })
+      openPersonPanel(id)
+    }, 50)
+  }, [addPerson, openPersonPanel, fitView])
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
