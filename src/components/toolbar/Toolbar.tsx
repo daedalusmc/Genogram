@@ -163,6 +163,7 @@ export function Toolbar() {
   const captureLayoutSnapshot = useGenogramStore((s) => s.captureLayoutSnapshot)
   const undoLayout = useGenogramStore((s) => s.undoLayout)
   const layoutSnapshot = useGenogramStore((s) => s.layoutSnapshot)
+  const toggleHelp = useGenogramStore((s) => s.toggleHelp)
   const exportJSON = useGenogramStore((s) => s.exportJSON)
   const importJSON = useGenogramStore((s) => s.importJSON)
   const { fitView } = useReactFlow()
@@ -270,6 +271,9 @@ export function Toolbar() {
         <PillBtn onClick={toggleLegend} active={ui.showLegend}
           style={ui.showLegend ? {} : { backgroundColor: 'transparent' }}>
           Legend
+        </PillBtn>
+        <PillBtn onClick={toggleHelp} style={{ backgroundColor: 'transparent' }}>
+          Help
         </PillBtn>
       </div>
 

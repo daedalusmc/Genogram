@@ -18,6 +18,7 @@ interface UIState {
   isPresentationMode: boolean
   presentationIndex: number
   showLegend: boolean
+  showHelp: boolean
   toolMode: 'hand' | 'pointer' | 'move'
   editingEdgeId: string | null
   isDarkMode: boolean
@@ -71,6 +72,7 @@ interface GenogramStore {
   togglePresentationMode: () => void
   setPresentationIndex: (index: number) => void
   toggleLegend: () => void
+  toggleHelp: () => void
   setToolMode: (mode: 'hand' | 'pointer' | 'move') => void
   setEditingEdgeId: (id: string | null) => void
   toggleTheme: () => void
@@ -112,6 +114,7 @@ const DEFAULT_UI: UIState = {
   isPresentationMode: false,
   presentationIndex: 0,
   showLegend: false,
+  showHelp: false,
   toolMode: 'pointer' as const,
   editingEdgeId: null,
   isDarkMode: typeof window !== 'undefined' && window.localStorage?.getItem('genogram-theme') === 'dark',
@@ -487,6 +490,10 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
 
   toggleLegend: () => {
     set((state) => ({ ui: { ...state.ui, showLegend: !state.ui.showLegend } }))
+  },
+
+  toggleHelp: () => {
+    set((state) => ({ ui: { ...state.ui, showHelp: !state.ui.showHelp } }))
   },
 
   setToolMode: (mode) => {

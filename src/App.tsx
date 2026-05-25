@@ -6,6 +6,7 @@ import { PersonFormPanel } from './components/panels/PersonFormPanel'
 import { PresentationMode } from './components/presentation/PresentationMode'
 import { Legend } from './components/ui/Legend'
 import { EmptyState } from './components/ui/EmptyState'
+import { HelpPanel } from './components/ui/HelpPanel'
 import { useGenogramStore } from './store/genogramStore'
 
 function AppContent() {
@@ -53,6 +54,9 @@ function AppContent() {
           <PersonFormPanel />
         )}
       </div>
+
+      {/* Help modal — overlays everything */}
+      <HelpPanel />
     </div>
   )
 }
