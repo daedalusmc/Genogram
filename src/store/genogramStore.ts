@@ -27,6 +27,11 @@ interface GenogramStore {
   // Data
   title: string
   persons: Record<string, Person>
+  // Snapshot of nodePositions captured right before the last Auto Layout
+  // run. Used to power the Undo Layout chip. Transient — not persisted to
+  // localStorage. Cleared on undo, on the next Auto Layout, or on the first
+  // manual node move after a layout.
+  layoutSnapshot: Record<string, { x: number; y: number }> | null
   structuralRelationships: Record<string, StructuralRelationship>
   emotionalRelationships: Record<string, EmotionalRelationship>
   presentationOrder: string[]
@@ -80,6 +85,9 @@ interface GenogramStore {
   convertToEmotional: (structRelId: string, emotionalType: import('../types/enums').EmotionalRelType) => string | null
   convertToStructural: (emoRelId: string, structuralType: import('../types/enums').StructuralRelType) => string | null
   triggerAutoLayout: () => void
+  captureLayoutSnapshot: () => void
+  undoLayout: () => void
+  clearLayoutSnapshot: () => void
 
   // Actions - Presentation
   setPresentationOrder: (order: string[]) => void
@@ -163,6 +171,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
   nodePositions: {},
   edgeWaypoints: {},
   layoutVersion: 0,
+  layoutSnapshot: null,
   ui: { ...DEFAULT_UI },
 
   addPerson: (gender) => {
@@ -466,6 +475,9 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
   setNodePosition: (id, pos) => {
     set((state) => ({
       nodePositions: { ...state.nodePositions, [id]: pos },
+      // Manual drag = the user is committing to this layout. Drop the
+      // pre-layout snapshot so the Undo Layout chip goes away.
+      layoutSnapshot: null,
     }))
     // Save without triggering re-layout
     get().saveToLocalStorage()
@@ -596,6 +608,23 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
     set((state) => ({ layoutVersion: state.layoutVersion + 1 }))
   },
 
+  captureLayoutSnapshot: () => {
+    // Take a copy of the current positions so the user can undo the next
+    // Auto Layout. Called by the toolbar handler right before triggering.
+    set((state) => ({ layoutSnapshot: { ...state.nodePositions } }))
+  },
+
+  undoLayout: () => {
+    const snap = get().layoutSnapshot
+    if (!snap) return
+    set({ nodePositions: { ...snap }, layoutSnapshot: null })
+    get().saveToLocalStorage()
+  },
+
+  clearLayoutSnapshot: () => {
+    set({ layoutSnapshot: null })
+  },
+
   exportJSON: () => {
     const state = get()
     return JSON.stringify({
@@ -680,6 +709,7 @@ export const useGenogramStore = create<GenogramStore>((set, get) => ({
       presentationOrder: [],
       nodePositions: {},
       edgeWaypoints: {},
+      layoutSnapshot: null,
       ui: {
         ...state.ui,
         selectedPersonId: null,

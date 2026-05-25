@@ -160,6 +160,9 @@ export function Toolbar() {
   const toggleLegend = useGenogramStore((s) => s.toggleLegend)
   const triggerAutoLayout = useGenogramStore((s) => s.triggerAutoLayout)
   const setNodePositions = useGenogramStore((s) => s.setNodePositions)
+  const captureLayoutSnapshot = useGenogramStore((s) => s.captureLayoutSnapshot)
+  const undoLayout = useGenogramStore((s) => s.undoLayout)
+  const layoutSnapshot = useGenogramStore((s) => s.layoutSnapshot)
   const exportJSON = useGenogramStore((s) => s.exportJSON)
   const importJSON = useGenogramStore((s) => s.importJSON)
   const { fitView } = useReactFlow()
@@ -229,13 +232,34 @@ export function Toolbar() {
       {/* Layout group */}
       <div className="flex items-center gap-1 rounded-full p-0.5"
         style={{ backgroundColor: 'var(--bg-hover)' }}>
-        <PillBtn onClick={() => {
-          setNodePositions({})
-          triggerAutoLayout()
-          setTimeout(() => fitView({ padding: 0.3, duration: 400 }), 100)
-        }} style={{ backgroundColor: 'transparent' }}>
+        <button
+          onClick={() => {
+            captureLayoutSnapshot()
+            setNodePositions({})
+            triggerAutoLayout()
+            setTimeout(() => fitView({ padding: 0.3, duration: 400 }), 100)
+          }}
+          className="px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 flex items-center gap-1.5"
+          style={{ backgroundColor: 'transparent', color: 'var(--text-secondary)' }}
+        >
           Auto Layout
-        </PillBtn>
+          <span
+            className="px-1.5 py-px rounded-full text-[9px] font-bold uppercase tracking-wider"
+            style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+          >
+            Beta
+          </span>
+        </button>
+        {layoutSnapshot && (
+          <button
+            onClick={undoLayout}
+            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 flex items-center gap-1"
+            style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent)' }}
+            title="Restore positions from before the last Auto Layout"
+          >
+            ↶ Undo Layout
+          </button>
+        )}
         <PillBtn onClick={() => fitView({ padding: 0.2, duration: 400 })}
           style={{ backgroundColor: 'transparent' }}>
           Fit View
